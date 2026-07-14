@@ -204,6 +204,9 @@ function parseRoute() {
 function nav(hash) {
   location.hash = hash;
 }
+
+// 分享模式：網址帶 ?trip=<id> 時鎖定單一行程（旅伴看不到其他旅行、沒有返回列表鈕）
+const lockedTripId = new URLSearchParams(location.search).get("trip");
 window.addEventListener("hashchange", onRoute);
 
 // 寫入失敗（規則擋下、斷線、登入失敗）時給使用者看得懂的提示，而不是靜默沒反應
@@ -213,6 +216,10 @@ window.addEventListener("unhandledrejection", (e) => {
 });
 
 function onRoute() {
+  if (lockedTripId && !parseRoute().tripId) {
+    location.hash = "#/t/" + lockedTripId + "/flight";
+    return; // hashchange 會再進來一次
+  }
   const { tripId } = parseRoute();
   if (tripId !== currentTripId) {
     if (tripUnsub) tripUnsub();
@@ -377,7 +384,7 @@ function render() {
 function topbar(title, backToHome) {
   const me = currentTripId ? getUser() : "";
   return `<header class="topbar">
-    ${backToHome ? `<button class="icon-btn" id="btn-back" title="回旅行列表">←</button>` : `<span style="font-size:20px">🧳</span>`}
+    ${backToHome && !lockedTripId ? `<button class="icon-btn" id="btn-back" title="回旅行列表">←</button>` : `<span style="font-size:20px">🧳</span>`}
     <h1>${esc(title)}</h1>
     ${me ? `<button class="userchip" id="btn-user" title="切換使用者">👤 ${esc(me)}</button>` : ""}
   </header>`;
@@ -563,7 +570,10 @@ function pageFlight() {
   const f = trip.flight || {};
   return `
     <div class="card">
-      <div class="card-head"><h2>ℹ️ 旅行資訊</h2><button class="edit-btn" id="edit-info">編輯</button></div>
+      <div class="card-head"><h2>ℹ️ 旅行資訊</h2>
+        <button class="edit-btn" id="share-trip">🔗 分享給旅伴</button>
+        <button class="edit-btn" id="edit-info">編輯</button>
+      </div>
       <dl class="kv">
         <dt>目的地</dt><dd>${esc(trip.destination || "—")}</dd>
         <dt>日期</dt><dd>${esc(trip.startDate || "—")}${trip.endDate ? " ~ " + esc(trip.endDate) : ""}</dd>
@@ -597,6 +607,19 @@ function pageFlight() {
 function bindFlight() {
   document.getElementById("edit-info").addEventListener("click", openTripInfoModal);
   document.getElementById("edit-flight").addEventListener("click", openFlightModal);
+  document.getElementById("share-trip").addEventListener("click", async () => {
+    // 專屬連結：旅伴打開只看到這一個行程
+    const url = location.origin + location.pathname + "?trip=" + currentTripId + "#/t/" + currentTripId + "/flight";
+    if (navigator.share) {
+      try { await navigator.share({ title: trip.name, url }); return; } catch { /* 使用者取消分享，改走複製 */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("已複製專屬連結！傳給旅伴即可，他們只會看到這個行程：\n" + url);
+    } catch {
+      prompt("複製這個連結傳給旅伴（只會看到這個行程）：", url);
+    }
+  });
 }
 
 function openTripInfoModal() {
@@ -884,16 +907,28 @@ function initRouteMap() {
         maxZoom: 18,
       }).addTo(map);
       let lastBase = null;
+      // 線段中點放交通時間小標籤（route 項目的 t 欄位＝「從上一個點過來」的時間）
+      const timeLabel = (a, b, text) => {
+        if (!text) return;
+        L.marker([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], {
+          interactive: false,
+          icon: L.divIcon({ className: "", html: `<div class="rt-time">${esc(text)}</div>`, iconSize: [0, 0] }),
+        }).addTo(map);
+      };
       pts.forEach((p, i) => {
         const ll = [p.lat, p.lng];
         if (p.side) {
-          if (lastBase)
+          if (lastBase) {
             L.polyline([lastBase, ll], { color: accent, weight: 2, dashArray: "4 6", opacity: 0.85 }).addTo(map);
+            timeLabel(lastBase, ll, p.t);
+          }
         } else {
-          if (lastBase)
+          if (lastBase) {
             L.polyline([lastBase, ll], p.fly
               ? { color: brand, weight: 2.5, dashArray: "1 8", opacity: 0.9 }
               : { color: brand, weight: 3, opacity: 0.9 }).addTo(map);
+            timeLabel(lastBase, ll, p.t);
+          }
           lastBase = ll;
         }
         const size = p.side ? 17 : 22;
@@ -1080,7 +1115,11 @@ function pageDay() {
                 .map(
                   (r) => `<tr>
                     <td class="s-time">${esc(r.time || "—")}</td>
-                    <td class="s-act">${esc(r.act || "")}</td>
+                    <td class="s-act">${esc(r.act || "")}${
+                      r.place
+                        ? ` <a class="s-map" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.place)}" target="_blank" rel="noopener" title="在 Google Maps 開啟：${esc(r.place)}">📍</a>`
+                        : ""
+                    }</td>
                     <td class="s-trans">${esc(r.stay || "")}</td>
                     <td class="s-trans">${esc(r.trans || "")}</td>
                     <td class="s-note">${esc(r.note || "")}</td>
@@ -1130,6 +1169,7 @@ function openSchedModal(editId) {
     <div class="field"><label>時間（24 小時制）</label>${timeSelects("sc-time", r ? r.time : "")}</div>
     <div class="field"><label>行程內容 *</label><input id="sc-act" value="${esc(r ? r.act || "" : "")}" placeholder="例：築地市場吃早餐" /></div>
     <div class="field"><label>預計停留</label><input id="sc-stay" value="${esc(r ? r.stay || "" : "")}" placeholder="例：1.5 小時" /></div>
+    <div class="field"><label>地點（填了會出現 📍 可開 Google Maps）</label><input id="sc-place" value="${esc(r ? r.place || "" : "")}" placeholder="例：Trinity College Dublin" /></div>
     <div class="field"><label>交通</label><input id="sc-trans" value="${esc(r ? r.trans || "" : "")}" placeholder="例：大江戶線 築地市場站" /></div>
     <div class="field"><label>備註</label><input id="sc-note" value="${esc(r ? r.note || "" : "")}" placeholder="例：週三公休" /></div>
     <div class="btn-row">
@@ -1148,6 +1188,7 @@ function openSchedModal(editId) {
           time: readTime(el, "sc-time"),
           act,
           stay: el.querySelector("#sc-stay").value.trim(),
+          place: el.querySelector("#sc-place").value.trim(),
           trans: el.querySelector("#sc-trans").value.trim(),
           note: el.querySelector("#sc-note").value.trim(),
         },

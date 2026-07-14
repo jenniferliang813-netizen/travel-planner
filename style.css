@@ -249,6 +249,14 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
   background: var(--brand); color: #fff; font-size: 10px; margin-right: 3px;
 }
 .rt-leg-item i { font-style: normal; margin-left: 2px; }
+.rt-time {
+  background: var(--card); color: var(--text-dim);
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 1px 6px; font-size: 10px; font-weight: 700;
+  white-space: nowrap; transform: translate(-50%, -50%);
+  box-shadow: var(--shadow); width: max-content;
+}
+.s-map { text-decoration: none; font-size: 15px; }
 .map-hint { font-size: 12px; color: var(--text-dim); margin-top: 6px; text-align: center; }
 .map-open-link { display: block; text-align: center; margin-top: 8px; font-size: 13px; color: var(--brand); }
 
