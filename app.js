@@ -848,6 +848,68 @@ function dayList() {
     .sort((a, b) => (a.n ?? 0) - (b.n ?? 0));
 }
 
+// ---- 行程簡圖（旅行團式總覽）----
+// trip.route = [{name, lat, lng, d:"Day 2-6", side:true(住宿點外的一日遊), fly:true(前一段是飛機)}]
+let leafletLoading = null;
+function ensureLeaflet() {
+  if (window.L) return Promise.resolve();
+  if (leafletLoading) return leafletLoading;
+  leafletLoading = new Promise((resolve, reject) => {
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    document.head.appendChild(css);
+    const s = document.createElement("script");
+    s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    s.onload = resolve;
+    s.onerror = () => { leafletLoading = null; reject(new Error("Leaflet 載入失敗")); };
+    document.body.appendChild(s);
+  });
+  return leafletLoading;
+}
+
+function initRouteMap() {
+  const el = document.getElementById("route-map");
+  const pts = trip && trip.route ? trip.route : [];
+  if (!el || !pts.length) return;
+  ensureLeaflet()
+    .then(() => {
+      if (!document.getElementById("route-map")) return; // 已切走就不畫
+      const css = getComputedStyle(document.body);
+      const brand = css.getPropertyValue("--brand").trim() || "#0e7490";
+      const accent = css.getPropertyValue("--accent").trim() || "#f59e0b";
+      const map = L.map(el, { scrollWheelZoom: false });
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; OpenStreetMap &copy; CARTO",
+        maxZoom: 18,
+      }).addTo(map);
+      let lastBase = null;
+      pts.forEach((p, i) => {
+        const ll = [p.lat, p.lng];
+        if (p.side) {
+          if (lastBase)
+            L.polyline([lastBase, ll], { color: accent, weight: 2, dashArray: "4 6", opacity: 0.85 }).addTo(map);
+        } else {
+          if (lastBase)
+            L.polyline([lastBase, ll], p.fly
+              ? { color: brand, weight: 2.5, dashArray: "1 8", opacity: 0.9 }
+              : { color: brand, weight: 3, opacity: 0.9 }).addTo(map);
+          lastBase = ll;
+        }
+        const size = p.side ? 17 : 22;
+        L.marker(ll, {
+          icon: L.divIcon({ className: "", html: `<div class="rt-dot ${p.side ? "side" : ""}">${i + 1}</div>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
+        })
+          .addTo(map)
+          .bindTooltip(esc(p.name) + (p.d ? "（" + esc(p.d) + "）" : ""), { direction: "top", offset: [0, -10], className: "rt-tip" });
+      });
+      map.fitBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng])), { padding: [34, 34] });
+    })
+    .catch(() => {
+      el.innerHTML = '<div class="empty">簡圖載入失敗（需要網路）</div>';
+    });
+}
+
 function mapEmbed(query) {
   const q = query || trip.destination || trip.name;
   const src = `https://maps.google.com/maps?q=${encodeURIComponent(q)}&output=embed&hl=zh-TW&z=13`;
@@ -886,9 +948,20 @@ function pageOutline() {
         .join("")
     : `<div class="empty">還沒有行程，按「＋」新增第一天</div>`;
 
+  const hasRoute = (trip.route || []).length > 0;
+  const mapCard = hasRoute
+    ? `<div class="card">
+        <div class="card-head"><h2>🗺️ 行程簡圖</h2></div>
+        <div id="route-map" class="map-frame"></div>
+        <div class="rt-legend">${trip.route
+          .map((p, i) => `<span class="rt-leg-item"><b>${i + 1}</b>${esc(p.name)}${p.d ? `<i>・${esc(p.d)}</i>` : ""}</span>`)
+          .join("")}</div>
+        <div class="map-hint">實線＝移動路線、虛線＝一日遊/飛行段。點各天的 📍 地點會開 Google Maps。</div>
+      </div>`
+    : `<div class="card">${mapEmbed(view.mapQuery)}</div>`;
   return `<div class="outline-layout">
     <div>${left}</div>
-    <div class="map-panel"><div class="card">${mapEmbed(view.mapQuery)}</div></div>
+    <div class="map-panel">${mapCard}</div>
   </div>`;
 }
 
@@ -896,8 +969,14 @@ function bindOutline() {
   document.querySelectorAll("[data-editday]").forEach((b) =>
     b.addEventListener("click", () => openDayModal(b.dataset.editday))
   );
+  const hasRoute = (trip.route || []).length > 0;
   document.querySelectorAll("[data-spot]").forEach((b) =>
     b.addEventListener("click", () => {
+      if (hasRoute) {
+        // 簡圖模式：點地點直接開 Google Maps（新分頁/App）
+        window.open("https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(b.dataset.spot), "_blank", "noopener");
+        return;
+      }
       view.mapQuery = b.dataset.spot;
       render();
       // 手機上地圖在下方，切換後捲到地圖
@@ -907,6 +986,7 @@ function bindOutline() {
       }
     })
   );
+  initRouteMap();
 }
 
 function openDayModal(editId) {
@@ -991,15 +1071,17 @@ function pageDay() {
       <div class="card-head">
         <h2>${curDay ? `Day ${curDay.n}${curDay.date ? "・" + esc(curDay.date) : ""}${curDay.title ? "・" + esc(curDay.title) : ""}` : "未分類"}</h2>
       </div>
+      ${curDay && curDay.lodging ? `<div class="d-row" style="margin-bottom:8px"><span class="d-ico">🏨</span><span>${esc(curDay.lodging)}</span></div>` : ""}
       ${
         shown.length
           ? `<div class="table-wrap"><table class="sched">
-              <thead><tr><th>時間</th><th>行程</th><th>交通</th><th>備註</th><th></th></tr></thead>
+              <thead><tr><th>時間</th><th>行程</th><th>停留</th><th>交通</th><th>備註</th><th></th></tr></thead>
               <tbody>${shown
                 .map(
                   (r) => `<tr>
                     <td class="s-time">${esc(r.time || "—")}</td>
                     <td class="s-act">${esc(r.act || "")}</td>
+                    <td class="s-trans">${esc(r.stay || "")}</td>
                     <td class="s-trans">${esc(r.trans || "")}</td>
                     <td class="s-note">${esc(r.note || "")}</td>
                     <td class="s-ops"><button class="mini-btn" data-editsched="${r.id}">✏️</button><button class="mini-btn danger" data-delsched="${r.id}">🗑️</button></td>
@@ -1047,6 +1129,7 @@ function openSchedModal(editId) {
     </div>
     <div class="field"><label>時間（24 小時制）</label>${timeSelects("sc-time", r ? r.time : "")}</div>
     <div class="field"><label>行程內容 *</label><input id="sc-act" value="${esc(r ? r.act || "" : "")}" placeholder="例：築地市場吃早餐" /></div>
+    <div class="field"><label>預計停留</label><input id="sc-stay" value="${esc(r ? r.stay || "" : "")}" placeholder="例：1.5 小時" /></div>
     <div class="field"><label>交通</label><input id="sc-trans" value="${esc(r ? r.trans || "" : "")}" placeholder="例：大江戶線 築地市場站" /></div>
     <div class="field"><label>備註</label><input id="sc-note" value="${esc(r ? r.note || "" : "")}" placeholder="例：週三公休" /></div>
     <div class="btn-row">
@@ -1064,6 +1147,7 @@ function openSchedModal(editId) {
           dayId,
           time: readTime(el, "sc-time"),
           act,
+          stay: el.querySelector("#sc-stay").value.trim(),
           trans: el.querySelector("#sc-trans").value.trim(),
           note: el.querySelector("#sc-note").value.trim(),
         },
