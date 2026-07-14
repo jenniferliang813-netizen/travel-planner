@@ -1,0 +1,5 @@
+# 只公開網頁本體；交班單與教學文件留在本機
+CLAUDE.md
+設定教學_Firebase與上線.md
+.claude/
+*.docx
