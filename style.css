@@ -188,6 +188,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
   background: var(--brand-soft); color: var(--brand);
   padding: 2px 10px; border-radius: 99px; font-weight: 700;
 }
+.flight-sub { font-size: 13px; color: var(--text-dim); font-weight: 700; margin: 14px 0 2px; }
+.card.me-card { box-shadow: var(--shadow), 0 0 0 2px var(--brand) inset; }
+.leg-block { margin-bottom: 4px; }
 
 /* ============ 行李頁 ============ */
 .progress-wrap { margin: 10px 0 14px; }

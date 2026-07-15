@@ -480,7 +480,7 @@ function openNewTripModal() {
         currency: el.querySelector("#nt-cur").value.trim() || "NT$",
         ...(fxCode ? { fx: { code: fxCode, rate: fxRate > 0 ? fxRate : 0 } } : {}),
         members: members.length ? members : [],
-        flight: { ob: {}, ib: {}, goTrans: "", backTrans: "", lounge: "" },
+        pax: {}, // 每位旅客各自的航班與機場交通（key=uid，name 存在值裡）
         luggage,
         days: {},
         sched: {},
@@ -566,8 +566,52 @@ function flightSeg(seg, fallback) {
   </div>`;
 }
 
+// 找某成員的航班區塊（pax key=uid，name 存在值裡，不拿名字當 key）
+function paxEntryOf(name) {
+  return Object.entries(trip.pax || {}).find(([, p]) => p && p.name === name) || null;
+}
+// 某人的額外航段（依 order 排）
+function legsOf(pax) {
+  return Object.entries((pax && pax.legs) || {})
+    .map(([id, l]) => ({ id, ...l }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+// 單一旅客的航班卡（去程／回程／額外航段／機場交通／貴賓室）
+function paxCard(name, pax, isMe) {
+  const f = pax || {};
+  const legHtml = legsOf(pax)
+    .map((l) => `<h3 class="flight-sub">🔀 ${esc(l.label || "額外航段")}</h3>${flightSeg(l, "—")}`)
+    .join("");
+  return `
+    <div class="card${isMe ? " me-card" : ""}">
+      <div class="card-head">
+        <h2>👤 ${esc(name)}${isMe ? "（我）" : ""} 的航班</h2>
+        <button class="edit-btn" data-pax="${esc(name)}">編輯</button>
+      </div>
+      <h3 class="flight-sub">🛫 去程</h3>
+      ${flightSeg(f.ob, "尚未填寫去程航班")}
+      <h3 class="flight-sub">🛬 回程</h3>
+      ${flightSeg(f.ib, "尚未填寫回程航班")}
+      ${legHtml}
+      <h3 class="flight-sub">🚌 機場交通</h3>
+      <dl class="kv">
+        <dt>去程</dt><dd style="white-space:pre-wrap">${esc(f.goTrans || "—")}</dd>
+        <dt>回程</dt><dd style="white-space:pre-wrap">${esc(f.backTrans || "—")}</dd>
+      </dl>
+      <h3 class="flight-sub">🛋️ 貴賓室</h3>
+      <div style="font-size:14px; white-space:pre-wrap">${
+        f.lounge ? `<span class="badge">使用</span>　${esc(f.lounge)}` : "不使用／未填寫"
+      }</div>
+    </div>`;
+}
+
 function pageFlight() {
-  const f = trip.flight || {};
+  const me = getUser();
+  const members = trip.members || [];
+  const cards = members
+    .map((name) => paxCard(name, paxEntryOf(name)?.[1] || null, name === me))
+    .join("");
   return `
     <div class="card">
       <div class="card-head"><h2>ℹ️ 旅行資訊</h2>
@@ -577,36 +621,19 @@ function pageFlight() {
       <dl class="kv">
         <dt>目的地</dt><dd>${esc(trip.destination || "—")}</dd>
         <dt>日期</dt><dd>${esc(trip.startDate || "—")}${trip.endDate ? " ~ " + esc(trip.endDate) : ""}</dd>
-        <dt>旅伴</dt><dd>${(trip.members || []).map((m) => esc(m)).join("、") || "—"}</dd>
+        <dt>旅伴</dt><dd>${members.map((m) => esc(m)).join("、") || "—"}</dd>
         <dt>記帳幣別</dt><dd>${esc(trip.currency || "NT$")}</dd>
       </dl>
+      <p class="form-hint">每個人各自填自己的航班與機場交通，互不覆蓋。按自己那張卡的「編輯」。</p>
     </div>
-    <div class="card">
-      <div class="card-head"><h2>🛫 去程</h2><button class="edit-btn" id="edit-flight">編輯航班</button></div>
-      ${flightSeg(f.ob, "尚未填寫去程航班")}
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>🛬 回程</h2></div>
-      ${flightSeg(f.ib, "尚未填寫回程航班")}
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>🚌 機場交通</h2></div>
-      <dl class="kv">
-        <dt>去程</dt><dd style="white-space:pre-wrap">${esc(f.goTrans || "—")}</dd>
-        <dt>回程</dt><dd style="white-space:pre-wrap">${esc(f.backTrans || "—")}</dd>
-      </dl>
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>🛋️ 貴賓室</h2></div>
-      <div style="font-size:14px; white-space:pre-wrap">${
-        f.lounge ? `<span class="badge">使用</span>　${esc(f.lounge)}` : "不使用／未填寫"
-      }</div>
-    </div>`;
+    ${cards || `<div class="empty">還沒有旅伴。按上面「編輯」加入旅伴後，再各自填航班。</div>`}`;
 }
 
 function bindFlight() {
   document.getElementById("edit-info").addEventListener("click", openTripInfoModal);
-  document.getElementById("edit-flight").addEventListener("click", openFlightModal);
+  document.querySelectorAll("[data-pax]").forEach((b) =>
+    b.addEventListener("click", () => openPaxModal(b.dataset.pax))
+  );
   document.getElementById("share-trip").addEventListener("click", async () => {
     // 專屬連結：旅伴打開只看到這一個行程
     const url = location.origin + location.pathname + "?trip=" + currentTripId + "#/t/" + currentTripId + "/flight";
@@ -690,15 +717,23 @@ function readSeg(el, p) {
   return { no: g("no"), from: g("from"), fromT: g("fromT"), dep: g("dep"), to: g("to"), toT: g("toT"), arr: g("arr") };
 }
 
-function openFlightModal() {
-  const f = trip.flight || {};
+function openPaxModal(name) {
+  const entry = paxEntryOf(name);          // [uid, pax] 或 null
+  const paxUid = entry ? entry[0] : uid(); // 沒有就開新的（uid 開頭是字母，可當 field path）
+  const f = entry ? entry[1] : {};
   openModal(`
-    <h3>編輯航班與交通</h3>
+    <h3>編輯 ${esc(name)} 的航班與交通</h3>
     <h3 style="font-size:14px;color:var(--brand)">🛫 去程</h3>
     ${segFields("ob", f.ob)}
     <hr class="divider" />
     <h3 style="font-size:14px;color:var(--brand)">🛬 回程</h3>
     ${segFields("ib", f.ib)}
+    <hr class="divider" />
+    <div class="card-head" style="margin:0">
+      <h3 style="font-size:14px;color:var(--brand);flex:1">🔀 額外航段（沒有就留空）</h3>
+      <button class="btn secondary" id="pax-addleg" style="flex:none">＋ 新增航段</button>
+    </div>
+    <div id="pax-legs"></div>
     <hr class="divider" />
     <div class="field"><label>去程機場交通（怎麼去機場）</label><textarea id="fl-go" rows="2" placeholder="例：搭機捷 07:00 從台北車站出發">${esc(f.goTrans || "")}</textarea></div>
     <div class="field"><label>回程機場交通（落地後怎麼走）</label><textarea id="fl-back" rows="2" placeholder="例：Skyliner 到上野">${esc(f.backTrans || "")}</textarea></div>
@@ -708,12 +743,46 @@ function openFlightModal() {
       <button class="btn" id="fl-save">儲存</button>
     </div>
   `, (el) => {
+    const legsBox = el.querySelector("#pax-legs");
+    let legSeq = 0;
+    function addLeg(l) {
+      l = l || {};
+      const lid = "leg" + legSeq++;
+      const div = document.createElement("div");
+      div.className = "leg-block";
+      div.dataset.lid = lid;
+      div.innerHTML = `
+        <div class="card-head" style="margin:0">
+          <label style="flex:1;font-weight:600;font-size:13px">額外航段</label>
+          <button type="button" class="mini-btn danger" data-rmleg>🗑️ 移除</button>
+        </div>
+        <div class="field"><label>標籤</label><input id="${lid}-label" value="${esc(l.label || "")}" placeholder="例：DUB→AMS 10/1" /></div>
+        ${segFields(lid, l)}
+        <hr class="divider" />`;
+      legsBox.appendChild(div);
+      div.querySelector("[data-rmleg]").addEventListener("click", () => div.remove());
+    }
+    legsOf(f).forEach(addLeg);
+    el.querySelector("#pax-addleg").addEventListener("click", (e) => { e.preventDefault(); addLeg(); });
+
     el.querySelector("#fl-cancel").addEventListener("click", closeModal);
     el.querySelector("#fl-save").addEventListener("click", async () => {
+      const legsObj = {};
+      let order = 0;
+      legsBox.querySelectorAll(".leg-block").forEach((div) => {
+        const lid = div.dataset.lid;
+        const label = div.querySelector(`#${lid}-label`).value.trim();
+        const seg = readSeg(div, lid);
+        if (!label && !seg.no && !seg.from && !seg.to) return; // 整段空白就略過
+        legsObj[uid()] = { label, ...seg, order: order++ };
+      });
       await store.updateTrip(currentTripId, {
-        flight: {
+        [`pax.${paxUid}`]: {
+          name,
+          order: f.order ?? (trip.members || []).indexOf(name),
           ob: readSeg(el, "ob"),
           ib: readSeg(el, "ib"),
+          legs: legsObj,
           goTrans: el.querySelector("#fl-go").value.trim(),
           backTrans: el.querySelector("#fl-back").value.trim(),
           lounge: el.querySelector("#fl-lounge").value.trim(),
