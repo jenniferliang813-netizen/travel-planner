@@ -52,6 +52,23 @@ body[data-season="winter"] { /* 冬：雪藍 */
     --line: #31405a; --brand: #7fa3e8; --brand-soft: #243a5e; --accent: #9db8e8;
   }
 }
+/* ===== 首頁「總表」文青主題（莫蘭迪奶茶），只套用在 body[data-home] ===== */
+:root { --font-title: "Noto Serif TC", "Noto Serif CJK TC", Georgia, "Songti TC", serif; }
+body[data-home] {
+  --bg: #e2e6e8; --card: #f4f6f7; --text: #3f4a52; --text-dim: #8b98a1;
+  --line: #d2dade; --brand: #7f95a3; --brand-soft: #e4ecf0; --accent: #b3a08c;
+  --shadow: 0 1px 2px rgba(55, 75, 90, 0.06), 0 6px 18px rgba(55, 75, 90, 0.08);
+}
+@media (prefers-color-scheme: dark) {
+  body[data-home] {
+    --bg: #22282c; --card: #2c343a; --text: #dde5e9; --text-dim: #96a5ae;
+    --line: #3c4850; --brand: #93aabb; --brand-soft: #34424c; --accent: #bfab92;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  }
+}
+/* 首頁標題與旅行名稱用文青宋體 */
+body[data-home] .topbar h1 { font-family: var(--font-title); font-weight: 700; letter-spacing: .03em; }
+body[data-home] .t-name { font-family: var(--font-title); font-weight: 500; letter-spacing: .02em; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -174,6 +191,19 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
 .trip-card .t-name { font-weight: 700; font-size: 16px; }
 .trip-card .t-meta { font-size: 13px; color: var(--text-dim); }
 .trip-card .t-arrow { color: var(--text-dim); }
+/* 已結束旅程：整張變淡 */
+.trip-card.past { opacity: 0.62; }
+.trip-card.past .t-emoji { filter: grayscale(0.5); }
+.trip-card.past:hover { opacity: 0.85; }
+/* 「已結束」分隔線 */
+.past-sep {
+  display: flex; align-items: center; gap: 10px;
+  margin: 22px 4px 10px; color: var(--text-dim);
+  font-size: 12px; letter-spacing: .12em;
+}
+.past-sep::before, .past-sep::after {
+  content: ""; flex: 1; height: 1px; background: var(--line);
+}
 
 /* ============ 航班頁 ============ */
 .flight-seg { display: flex; align-items: center; gap: 8px; margin: 10px 0; }

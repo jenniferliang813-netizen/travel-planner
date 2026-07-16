@@ -168,6 +168,7 @@ let lastError = "";
 const view = {
   bagPerson: null, // 行李頁看誰的勾選
   bagManage: false, // 行李頁管理模式
+  bagTab: "lug", // 行李頁內切換：lug=行李清單、shop=採購清單
   mapQuery: null, // 大綱頁目前地圖查詢字
   schedDay: null, // 每日行程頁目前選的天（dayId 或 "all"）
 };
@@ -228,6 +229,7 @@ function onRoute() {
     currentTripId = tripId;
     view.bagPerson = null;
     view.bagManage = false;
+    view.bagTab = "lug";
     view.mapQuery = null;
     view.schedDay = null;
     if (tripId) {
@@ -364,9 +366,11 @@ function render() {
   const { tripId, tab } = parseRoute();
   if (!tripId) {
     applySeason(null);
+    document.body.dataset.home = "1"; // 首頁專屬文青配色/字體
     renderHome();
     return;
   }
+  document.body.removeAttribute("data-home");
   applySeason(trip);
   if (trip === null) {
     $app.innerHTML = `
@@ -409,17 +413,18 @@ function modeNotice() {
 // 首頁
 // =====================================================================
 function renderHome() {
-  $app.innerHTML = `
-    ${topbar("旅行計畫", false)}
-    <div class="page">
-      ${modeNotice()}
-      ${
-        trips.length === 0
-          ? `<div class="empty">還沒有旅行 —— 按右下角「＋」建立第一個！</div>`
-          : trips
-              .map(
-                (t) => `<div class="card trip-card" data-id="${esc(t.id)}">
-                  <span class="t-emoji">✈️</span>
+  // 排序：未來/進行中在上（出發日最近的最前）；已結束的變淡、移到最下（最近結束的最前）
+  const d = new Date();
+  const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const endOf = (t) => t.endDate || t.startDate || "";
+  const isPast = (t) => endOf(t) && endOf(t) < todayStr;
+  const upcoming = trips
+    .filter((t) => !isPast(t))
+    .sort((a, b) => (a.startDate || "9999-99-99").localeCompare(b.startDate || "9999-99-99"));
+  const past = trips.filter(isPast).sort((a, b) => endOf(b).localeCompare(endOf(a)));
+
+  const card = (t, isP) => `<div class="card trip-card${isP ? " past" : ""}" data-id="${esc(t.id)}">
+                  <span class="t-emoji">${isP ? "🗓️" : "✈️"}</span>
                   <div class="t-info">
                     <div class="t-name">${esc(t.name)}</div>
                     <div class="t-meta">${esc(t.destination || "")}　${esc(t.startDate || "")}${
@@ -427,10 +432,19 @@ function renderHome() {
                 }</div>
                   </div>
                   <span class="t-arrow">›</span>
-                </div>`
-              )
-              .join("")
-      }
+                </div>`;
+
+  const body =
+    trips.length === 0
+      ? `<div class="empty">還沒有旅行 —— 按右下角「＋」建立第一個！</div>`
+      : upcoming.map((t) => card(t, false)).join("") +
+        (past.length ? `<div class="past-sep"><span>・已結束・</span></div>` + past.map((t) => card(t, true)).join("") : "");
+
+  $app.innerHTML = `
+    ${topbar("婷瑋的出國旅行計畫~", false)}
+    <div class="page">
+      ${modeNotice()}
+      ${body}
     </div>
     <button class="fab" id="fab-new" title="新增旅行">＋</button>`;
   bindTopbar();
@@ -482,6 +496,7 @@ function openNewTripModal() {
         members: members.length ? members : [],
         pax: {}, // 每位旅客各自的航班與機場交通（key=uid，name 存在值裡）
         luggage,
+        shopping: {}, // 採購清單（共用勾選，key=uid）
         days: {},
         sched: {},
         exp: {},
@@ -523,7 +538,7 @@ function renderTrip(tab) {
 }
 
 function fabFor(tab) {
-  const map = { bag: "新增行李", outline: "新增一天", day: "新增行程", money: "新增一筆帳" };
+  const map = { bag: view.bagTab === "shop" ? "新增採購項目" : "新增行李", outline: "新增一天", day: "新增行程", money: "新增一筆帳" };
   if (!map[tab]) return "";
   return `<button class="fab" id="fab-add" title="${map[tab]}">＋</button>`;
 }
@@ -532,7 +547,7 @@ function bindTripPage(tab) {
   const fab = document.getElementById("fab-add");
   if (fab)
     fab.addEventListener("click", () => {
-      if (tab === "bag") openBagItemModal();
+      if (tab === "bag") view.bagTab === "shop" ? openShopItemModal() : openBagItemModal();
       else if (tab === "outline") openDayModal();
       else if (tab === "day") openSchedModal();
       else if (tab === "money") openExpenseModal();
@@ -804,7 +819,57 @@ function bagItems() {
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
+function shopItems() {
+  return Object.entries(trip.shopping || {})
+    .map(([id, it]) => ({ id, ...it }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+// 行李頁頂部的「行李｜採購」切換鈕
+function bagTabSwitch() {
+  return `<div class="chips" style="margin-bottom:10px">
+    <button class="chip ${view.bagTab !== "shop" ? "active" : ""}" data-bagtab="lug">🧳 行李清單</button>
+    <button class="chip ${view.bagTab === "shop" ? "active" : ""}" data-bagtab="shop">🛒 採購清單</button>
+  </div>`;
+}
+
+// 採購清單（清單與勾選都全員共用；勾掉＝買到了）
+function pageShop() {
+  const items = shopItems();
+  const done = items.filter((it) => it.done).length;
+  const pct = items.length ? Math.round((done / items.length) * 100) : 0;
+  return `
+    ${bagTabSwitch()}
+    <div class="card">
+      <div class="card-head"><h2>採購進度</h2>
+        <button class="edit-btn" id="bag-manage">${view.bagManage ? "完成管理" : "管理清單"}</button>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar"><div style="width:${pct}%"></div></div>
+        <div class="progress-text">買到 ${done}/${items.length}（${pct}%）</div>
+      </div>
+    </div>
+    ${
+      items.length
+        ? `<div class="card">${items
+            .map(
+              (it) => `<div class="lug-item ${it.done ? "checked" : ""}">
+                <input type="checkbox" data-shopid="${it.id}" ${it.done ? "checked" : ""} />
+                <div class="l-name">${esc(it.name)}${it.note ? `<div class="l-note">${esc(it.note)}</div>` : ""}</div>
+                ${
+                  view.bagManage
+                    ? `<button class="mini-btn" data-shopedit="${it.id}">✏️</button><button class="mini-btn danger" data-shopdel="${it.id}">🗑️</button>`
+                    : ""
+                }
+              </div>`
+            )
+            .join("")}</div>`
+        : `<div class="empty">還沒有採購項目，按「＋」新增（例：辣炒年糕泡麵 媽要兩包）</div>`
+    }`;
+}
+
 function pageBag() {
+  if (view.bagTab === "shop") return pageShop();
   const members = trip.members || [];
   const me = getUser();
   if (!view.bagPerson || !members.includes(view.bagPerson))
@@ -839,6 +904,7 @@ function pageBag() {
     .join("");
 
   return `
+    ${bagTabSwitch()}
     <div class="card">
       <div class="card-head"><h2>誰的打包進度</h2>
         <button class="edit-btn" id="bag-manage">${view.bagManage ? "完成管理" : "管理清單"}</button>
@@ -855,6 +921,13 @@ function pageBag() {
 }
 
 function bindBag() {
+  // 行李｜採購 切換
+  document.querySelectorAll("[data-bagtab]").forEach((b) =>
+    b.addEventListener("click", () => {
+      view.bagTab = b.dataset.bagtab;
+      render();
+    })
+  );
   document.querySelectorAll("[data-person]").forEach((b) =>
     b.addEventListener("click", () => {
       view.bagPerson = b.dataset.person;
@@ -865,6 +938,25 @@ function bindBag() {
     view.bagManage = !view.bagManage;
     render();
   });
+  // ---- 採購清單模式 ----
+  if (view.bagTab === "shop") {
+    document.querySelectorAll("[data-shopid]").forEach((cb) =>
+      cb.addEventListener("change", async () => {
+        await store.updateTrip(currentTripId, { [`shopping.${cb.dataset.shopid}.done`]: cb.checked });
+      })
+    );
+    document.querySelectorAll("[data-shopedit]").forEach((b) =>
+      b.addEventListener("click", () => openShopItemModal(b.dataset.shopedit))
+    );
+    document.querySelectorAll("[data-shopdel]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        const it = (trip.shopping || {})[b.dataset.shopdel];
+        if (!it || !confirm(`刪除「${it.name}」？`)) return;
+        await store.updateTrip(currentTripId, { [`shopping.${b.dataset.shopdel}`]: DELETE });
+      })
+    );
+    return; // 下面是行李模式的綁定
+  }
   document.querySelectorAll(".lug-item input[type=checkbox]").forEach((cb) =>
     cb.addEventListener("change", async () => {
       const it = (trip.luggage || {})[cb.dataset.id];
@@ -924,6 +1016,36 @@ function openBagItemModal(editId) {
           note: el.querySelector("#bg-note").value.trim(),
           order: it ? it.order ?? 0 : maxOrder + 1,
           checked: it ? it.checked || {} : {},
+        },
+      });
+      closeModal();
+    });
+  });
+}
+
+function openShopItemModal(editId) {
+  const it = editId ? (trip.shopping || {})[editId] : null;
+  openModal(`
+    <h3>${it ? "編輯採購項目" : "新增採購項目"}</h3>
+    <div class="field"><label>名稱 *</label><input id="sp-name" value="${esc(it ? it.name : "")}" placeholder="例：辣炒年糕泡麵" /></div>
+    <div class="field"><label>備註</label><input id="sp-note" value="${esc(it ? it.note || "" : "")}" placeholder="例：媽要兩包、樂天超市有" /></div>
+    <div class="btn-row">
+      <button class="btn secondary" id="sp-cancel">取消</button>
+      <button class="btn" id="sp-save">儲存</button>
+    </div>
+  `, (el) => {
+    el.querySelector("#sp-cancel").addEventListener("click", closeModal);
+    el.querySelector("#sp-save").addEventListener("click", async () => {
+      const name = el.querySelector("#sp-name").value.trim();
+      if (!name) return alert("請填名稱");
+      const id = editId || uid();
+      const maxOrder = Math.max(0, ...shopItems().map((i) => i.order ?? 0));
+      await store.updateTrip(currentTripId, {
+        [`shopping.${id}`]: {
+          name,
+          note: el.querySelector("#sp-note").value.trim(),
+          order: it ? it.order ?? 0 : maxOrder + 1,
+          done: it ? !!it.done : false,
         },
       });
       closeModal();
