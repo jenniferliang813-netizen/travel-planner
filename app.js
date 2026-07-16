@@ -1014,14 +1014,18 @@ function initRouteMap() {
     });
 }
 
+// 地點查詢連結：Google Maps 與 Naver Map（韓國當地用 Naver 導航較準）
+function gmapUrl(q) { return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`; }
+function nmapUrl(q) { return `https://map.naver.com/p/search/${encodeURIComponent(q)}`; }
+
 function mapEmbed(query) {
   const q = query || trip.destination || trip.name;
   const src = `https://maps.google.com/maps?q=${encodeURIComponent(q)}&output=embed&hl=zh-TW&z=13`;
-  const open = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
   return `
     <iframe class="map-frame" src="${src}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
     <div class="map-hint">📍 ${esc(q)}（點行程裡的地點可切換）</div>
-    <a class="map-open-link" href="${open}" target="_blank" rel="noopener">在 Google Maps App 開啟 →</a>`;
+    <a class="map-open-link" href="${gmapUrl(q)}" target="_blank" rel="noopener">在 Google Maps App 開啟 →</a>
+    <a class="map-open-link" href="${nmapUrl(q)}" target="_blank" rel="noopener">在 Naver Map 開啟 →</a>`;
 }
 
 function pageOutline() {
@@ -1044,7 +1048,7 @@ function pageOutline() {
             <div>${(d.spots || [])
               .map(
                 (s) =>
-                  `<button class="spot-chip ${view.mapQuery === s ? "active" : ""}" data-spot="${esc(s)}">📍 ${esc(s)}</button>`
+                  `<span class="spot-wrap"><button class="spot-chip ${view.mapQuery === s ? "active" : ""}" data-spot="${esc(s)}">📍 ${esc(s)}</button><a class="spot-naver" href="${nmapUrl(s)}" target="_blank" rel="noopener" title="在 Naver Map 開啟：${esc(s)}">N</a></span>`
               )
               .join("")}</div>
           </div>`
@@ -1060,7 +1064,7 @@ function pageOutline() {
         <div class="rt-legend">${trip.route
           .map((p, i) => `<span class="rt-leg-item"><b>${i + 1}</b>${esc(p.name)}${p.d ? `<i>・${esc(p.d)}</i>` : ""}</span>`)
           .join("")}</div>
-        <div class="map-hint">實線＝移動路線、虛線＝一日遊/飛行段。點各天的 📍 地點會開 Google Maps。</div>
+        <div class="map-hint">實線＝移動路線、虛線＝一日遊/飛行段。點 📍 開 Google Maps、點 N 開 Naver Map。</div>
       </div>`
     : `<div class="card">${mapEmbed(view.mapQuery)}</div>`;
   return `<div class="outline-layout">
@@ -1186,7 +1190,7 @@ function pageDay() {
                     <td class="s-time">${esc(r.time || "—")}</td>
                     <td class="s-act">${esc(r.act || "")}${
                       r.place
-                        ? ` <a class="s-map" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.place)}" target="_blank" rel="noopener" title="在 Google Maps 開啟：${esc(r.place)}">📍</a>`
+                        ? ` <a class="s-map" href="${gmapUrl(r.place)}" target="_blank" rel="noopener" title="在 Google Maps 開啟：${esc(r.place)}">📍</a><a class="s-map s-naver" href="${nmapUrl(r.place)}" target="_blank" rel="noopener" title="在 Naver Map 開啟：${esc(r.place)}">N</a>`
                         : ""
                     }</td>
                     <td class="s-trans">${esc(r.stay || "")}</td>
