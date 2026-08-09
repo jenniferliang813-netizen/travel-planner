@@ -857,6 +857,11 @@ function pageShop() {
                 <input type="checkbox" data-shopid="${it.id}" ${it.done ? "checked" : ""} />
                 <div class="l-name">${esc(it.name)}${it.note ? `<div class="l-note">${esc(it.note)}</div>` : ""}</div>
                 ${
+                  it.link
+                    ? `<a class="shop-link" href="${esc(it.link)}" target="_blank" rel="noopener">🔗 參考</a>`
+                    : ""
+                }
+                ${
                   view.bagManage
                     ? `<button class="mini-btn" data-shopedit="${it.id}">✏️</button><button class="mini-btn danger" data-shopdel="${it.id}">🗑️</button>`
                     : ""
@@ -1029,6 +1034,7 @@ function openShopItemModal(editId) {
     <h3>${it ? "編輯採購項目" : "新增採購項目"}</h3>
     <div class="field"><label>名稱 *</label><input id="sp-name" value="${esc(it ? it.name : "")}" placeholder="例：辣炒年糕泡麵" /></div>
     <div class="field"><label>備註</label><input id="sp-note" value="${esc(it ? it.note || "" : "")}" placeholder="例：媽要兩包、樂天超市有" /></div>
+    <div class="field"><label>參考連結</label><input id="sp-link" value="${esc(it ? it.link || "" : "")}" placeholder="貼商品頁或 IG 貼文網址，清單上會出現 🔗" /></div>
     <div class="btn-row">
       <button class="btn secondary" id="sp-cancel">取消</button>
       <button class="btn" id="sp-save">儲存</button>
@@ -1044,6 +1050,7 @@ function openShopItemModal(editId) {
         [`shopping.${id}`]: {
           name,
           note: el.querySelector("#sp-note").value.trim(),
+          link: el.querySelector("#sp-link").value.trim(),
           order: it ? it.order ?? 0 : maxOrder + 1,
           done: it ? !!it.done : false,
         },

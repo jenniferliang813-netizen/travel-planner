@@ -236,6 +236,12 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
 .lug-item .l-name { flex: 1; font-size: 15px; }
 .lug-item.checked .l-name { color: var(--text-dim); text-decoration: line-through; }
 .lug-item .l-note { font-size: 12px; color: var(--text-dim); }
+/* 採購清單的「🔗 參考」連結（開商品頁／原始貼文） */
+.shop-link {
+  flex: none; font-size: 12px; font-weight: 700; line-height: 1;
+  color: var(--brand); background: var(--brand-soft);
+  border-radius: 6px; padding: 5px 7px; white-space: nowrap;
+}
 
 /* ============ 行程大綱頁 ============ */
 .outline-layout { display: grid; grid-template-columns: 1fr; gap: 12px; }
