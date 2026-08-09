@@ -3,3 +3,13 @@ CLAUDE.md
 設定教學_Firebase與上線.md
 .claude/
 *.docx
+AGENTS.md
+
+# Cloudflare Worker local state / secrets
+worker/.dev.vars
+worker/.secrets.json
+worker/.wrangler/
+worker/node_modules/
+
+# Private usage note containing the read key
+PRIVATE_TRIP_API.md

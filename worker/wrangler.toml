@@ -1,0 +1,9 @@
+name = "travel-planner-readonly-api"
+main = "src/index.js"
+compatibility_date = "2026-08-09"
+workers_dev = true
+
+[vars]
+FIREBASE_API_KEY = "AIzaSyA8E1uCbYRk_m9Npa9uq1HgjKXe0tR2JAc"
+FIREBASE_PROJECT_ID = "travel-planner-40b2a"
+ALLOWED_TRIP_IDS = "busan2026aug"
