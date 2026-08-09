@@ -833,11 +833,49 @@ function bagTabSwitch() {
   </div>`;
 }
 
+function shopRow(it) {
+  return `<div class="lug-item ${it.done ? "checked" : ""}">
+    <input type="checkbox" data-shopid="${it.id}" ${it.done ? "checked" : ""} />
+    <div class="l-name">${esc(it.name)}${it.note ? `<div class="l-note">${esc(it.note)}</div>` : ""}</div>
+    ${it.link ? `<a class="shop-link" href="${esc(it.link)}" target="_blank" rel="noopener">🔗 參考</a>` : ""}
+    ${
+      view.bagManage
+        ? `<button class="mini-btn" data-shopedit="${it.id}">✏️</button><button class="mini-btn danger" data-shopdel="${it.id}">🗑️</button>`
+        : ""
+    }
+  </div>`;
+}
+
 // 採購清單（清單與勾選都全員共用；勾掉＝買到了）
+// 依 cat 分組＝同一家店的東西放一起。cat 慣例寫成「店名｜第幾天時間｜地址」，
+// 渲染時用第一個「｜」拆成標題＋灰字副標；資料仍只是一個字串，使用者可自由改。
 function pageShop() {
   const items = shopItems();
   const done = items.filter((it) => it.done).length;
   const pct = items.length ? Math.round((done / items.length) * 100) : 0;
+
+  // items 已依 order 排序 → 用「第一次出現」決定分類順序，剛好等同行程先後
+  const cats = [];
+  items.forEach((it) => {
+    const c = it.cat || "其他";
+    if (!cats.includes(c)) cats.push(c);
+  });
+
+  const groups = cats
+    .map((cat) => {
+      const list = items.filter((it) => (it.cat || "其他") === cat);
+      const parts = cat.split("｜");
+      const sub = parts.slice(1).join("｜");
+      return `<div class="card">
+        <div class="card-head">
+          <h2>${esc(parts[0])}${sub ? `<div class="shop-cat-sub">${esc(sub)}</div>` : ""}</h2>
+          <span class="sub">${list.filter((i) => i.done).length}/${list.length}</span>
+        </div>
+        ${list.map(shopRow).join("")}
+      </div>`;
+    })
+    .join("");
+
   return `
     ${bagTabSwitch()}
     <div class="card">
@@ -849,28 +887,7 @@ function pageShop() {
         <div class="progress-text">買到 ${done}/${items.length}（${pct}%）</div>
       </div>
     </div>
-    ${
-      items.length
-        ? `<div class="card">${items
-            .map(
-              (it) => `<div class="lug-item ${it.done ? "checked" : ""}">
-                <input type="checkbox" data-shopid="${it.id}" ${it.done ? "checked" : ""} />
-                <div class="l-name">${esc(it.name)}${it.note ? `<div class="l-note">${esc(it.note)}</div>` : ""}</div>
-                ${
-                  it.link
-                    ? `<a class="shop-link" href="${esc(it.link)}" target="_blank" rel="noopener">🔗 參考</a>`
-                    : ""
-                }
-                ${
-                  view.bagManage
-                    ? `<button class="mini-btn" data-shopedit="${it.id}">✏️</button><button class="mini-btn danger" data-shopdel="${it.id}">🗑️</button>`
-                    : ""
-                }
-              </div>`
-            )
-            .join("")}</div>`
-        : `<div class="empty">還沒有採購項目，按「＋」新增（例：辣炒年糕泡麵 媽要兩包）</div>`
-    }`;
+    ${items.length ? groups : `<div class="empty">還沒有採購項目，按「＋」新增（例：辣炒年糕泡麵 媽要兩包）</div>`}`;
 }
 
 function pageBag() {
@@ -1030,9 +1047,16 @@ function openBagItemModal(editId) {
 
 function openShopItemModal(editId) {
   const it = editId ? (trip.shopping || {})[editId] : null;
+  const existingCats = [...new Set(shopItems().map((i) => i.cat || "其他"))];
   openModal(`
     <h3>${it ? "編輯採購項目" : "新增採購項目"}</h3>
     <div class="field"><label>名稱 *</label><input id="sp-name" value="${esc(it ? it.name : "")}" placeholder="例：辣炒年糕泡麵" /></div>
+    <div class="field"><label>在哪買（分類）</label>
+      <select id="sp-cat">${existingCats.map((c) => `<option ${it && it.cat === c ? "selected" : ""}>${esc(c)}</option>`).join("")}
+        <option value="__new__">＋ 新店家…</option>
+      </select>
+    </div>
+    <div class="field" id="sp-newcat-wrap" style="display:none"><label>新店家（建議寫「店名｜第幾天｜地址」）</label><input id="sp-newcat" placeholder="例：🛒 E-Mart 海雲台店｜Day2 15:15｜좌동순환로 511" /></div>
     <div class="field"><label>備註</label><input id="sp-note" value="${esc(it ? it.note || "" : "")}" placeholder="例：媽要兩包、樂天超市有" /></div>
     <div class="field"><label>參考連結</label><input id="sp-link" value="${esc(it ? it.link || "" : "")}" placeholder="貼商品頁或 IG 貼文網址，清單上會出現 🔗" /></div>
     <div class="btn-row">
@@ -1040,14 +1064,20 @@ function openShopItemModal(editId) {
       <button class="btn" id="sp-save">儲存</button>
     </div>
   `, (el) => {
+    el.querySelector("#sp-cat").addEventListener("change", (e) => {
+      el.querySelector("#sp-newcat-wrap").style.display = e.target.value === "__new__" ? "" : "none";
+    });
     el.querySelector("#sp-cancel").addEventListener("click", closeModal);
     el.querySelector("#sp-save").addEventListener("click", async () => {
       const name = el.querySelector("#sp-name").value.trim();
       if (!name) return alert("請填名稱");
+      let cat = el.querySelector("#sp-cat").value;
+      if (cat === "__new__") cat = el.querySelector("#sp-newcat").value.trim() || "其他";
       const id = editId || uid();
       const maxOrder = Math.max(0, ...shopItems().map((i) => i.order ?? 0));
       await store.updateTrip(currentTripId, {
         [`shopping.${id}`]: {
+          cat,
           name,
           note: el.querySelector("#sp-note").value.trim(),
           link: el.querySelector("#sp-link").value.trim(),
