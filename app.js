@@ -1178,6 +1178,24 @@ function gmapUrl(q) { return `https://www.google.com/maps/search/?api=1&query=${
 function nmapUrl(q) { return `https://map.naver.com/p/search/${encodeURIComponent(q)}`; }
 function showNaverMaps() { return trip?.mapLinks?.naver !== false; }
 function spotList(d) { return Array.isArray(d.spots) ? d.spots : d.spots ? [d.spots] : []; }
+function dayTravelers(d) { return Array.isArray(d.travelers) ? d.travelers : []; }
+
+function tripPhaseCard() {
+  const phases = Array.isArray(trip.phases) ? trip.phases : [];
+  if (!phases.length) return "";
+  const iconOf = (kind) => ({ solo: "👤", meet: "🤝", together: "👥" }[kind] || "✈️");
+  const classOf = (kind) => (["solo", "meet", "together"].includes(kind) ? kind : "default");
+  return `<div class="card phase-card">
+    <div class="card-head"><h2>🧭 旅程分段</h2></div>
+    <div class="phase-list">${phases.map((phase) => `<div class="phase-item phase-${classOf(phase.kind)}">
+      <span class="phase-icon">${iconOf(phase.kind)}</span>
+      <div class="phase-text">
+        <b>${phase.date ? `<span>${esc(phase.date)}</span>` : ""}${esc(phase.label || "")}</b>
+        ${phase.note ? `<small>${esc(phase.note)}</small>` : ""}
+      </div>
+    </div>`).join("")}</div>
+  </div>`;
+}
 
 const STATUS_LABELS = {
   pending: "pending",
@@ -1237,9 +1255,14 @@ function pageOutline() {
               </div>
               <button class="edit-btn" data-editday="${d.id}">編輯</button>
             </div>
+            ${d.milestone ? `<div class="day-milestone">${esc(d.milestone)}</div>` : ""}
+            ${dayTravelers(d).length ? `<div class="day-travelers">${dayTravelers(d)
+              .map((name) => `<span>👤 ${esc(name)}</span>`)
+              .join("")}</div>` : ""}
             ${d.plan ? `<div class="d-plan">${esc(d.plan)}</div>` : ""}
             ${d.transport ? `<div class="d-row"><span class="d-ico">🚃</span><span>${esc(d.transport)}</span></div>` : ""}
-            ${d.lodging ? `<div class="d-row"><span class="d-ico">🏨</span><span>${esc(d.lodging)}</span></div>` : ""}
+            ${d.lodging ? `<div class="d-row"><span class="d-ico">🏨</span><span>${esc(d.lodging)}</span>${
+              d.lodgingPlace ? `<a class="lodging-map" href="${gmapUrl(d.lodgingPlace)}" target="_blank" rel="noopener" title="在 Google Maps 開啟：${esc(d.lodgingPlace)}">📍 Google Maps</a>` : ""}</div>` : ""}
             <div>${spotList(d)
               .map(
                 (s) =>
@@ -1262,7 +1285,7 @@ function pageOutline() {
         <div class="map-hint">實線＝移動路線、虛線＝一日遊/飛行段。點 📍 開 Google Maps${showNaverMaps() ? "、點 N 開 Naver Map" : ""}。</div>
       </div>`
     : `<div class="card">${mapEmbed(view.mapQuery)}</div>`;
-  return `${todoCard()}<div class="outline-layout">
+  return `${tripPhaseCard()}${todoCard()}<div class="outline-layout">
     <div>${left}</div>
     <div class="map-panel">${mapCard}</div>
   </div>`;
@@ -1344,9 +1367,16 @@ function openDayModal(editId) {
       <div class="field"><label>日期</label><input id="dy-date" type="date" value="${esc(d ? d.date || "" : "")}" /></div>
     </div>
     <div class="field"><label>當天主題</label><input id="dy-title" value="${esc(d ? d.title || "" : "")}" placeholder="例：淺草・晴空塔" /></div>
+    <div class="field"><label>旅程轉折標記（選填）</label><input id="dy-milestone" value="${esc(d ? d.milestone || "" : "")}" placeholder="例：🤝 旅伴加入・雙人旅程開始" /></div>
+    <div class="field"><label>當天同行者</label><div class="check-grid">${checkPills(
+      "dy-travelers",
+      trip.members || [],
+      new Set(d ? dayTravelers(d) : trip.members || [])
+    )}</div></div>
     <div class="field"><label>大概行程</label><textarea id="dy-plan" rows="3" placeholder="例：上午淺草寺 → 午餐鰻魚飯 → 下午晴空塔">${esc(d ? d.plan || "" : "")}</textarea></div>
     <div class="field"><label>交通</label><input id="dy-trans" value="${esc(d ? d.transport || "" : "")}" placeholder="例：地鐵銀座線一日券" /></div>
     <div class="field"><label>住宿</label><input id="dy-lodge" value="${esc(d ? d.lodging || "" : "")}" placeholder="例：上野 APA Hotel" /></div>
+    <div class="field"><label>住宿 Google Maps 查詢字（選填）</label><input id="dy-lodge-place" value="${esc(d ? d.lodgingPlace || "" : "")}" placeholder="例：APA Hotel Ueno Ekimae Tokyo" /></div>
     <div class="field"><label>地圖大點（用逗號或頓號分隔，會變成可點的地圖標籤）</label>
       <input id="dy-spots" value="${esc(d ? spotList(d).join("、") : "")}" placeholder="例：淺草寺、晴空塔、上野APA Hotel" /></div>
     <div class="btn-row">
@@ -1355,6 +1385,7 @@ function openDayModal(editId) {
       <button class="btn" id="dy-save">儲存</button>
     </div>
   `, (el) => {
+    bindPills(el);
     el.querySelector("#dy-cancel").addEventListener("click", closeModal);
     if (d)
       el.querySelector("#dy-del").addEventListener("click", async () => {
@@ -1364,14 +1395,18 @@ function openDayModal(editId) {
       });
     el.querySelector("#dy-save").addEventListener("click", async () => {
       const spots = el.querySelector("#dy-spots").value.split(/[,、，]+/).map((s) => s.trim()).filter(Boolean);
+      const travelers = [...el.querySelectorAll('input[name="dy-travelers"]:checked')].map((input) => input.value);
       await store.updateTrip(currentTripId, {
         [`days.${editId || uid()}`]: {
           n: (() => { const v = parseInt(el.querySelector("#dy-n").value, 10); return Number.isFinite(v) && v >= 1 ? v : nextN; })(),
           date: el.querySelector("#dy-date").value,
           title: el.querySelector("#dy-title").value.trim(),
+          milestone: el.querySelector("#dy-milestone").value.trim(),
+          travelers,
           plan: el.querySelector("#dy-plan").value.trim(),
           transport: el.querySelector("#dy-trans").value.trim(),
           lodging: el.querySelector("#dy-lodge").value.trim(),
+          lodgingPlace: el.querySelector("#dy-lodge-place").value.trim(),
           spots,
         },
       });

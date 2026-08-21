@@ -256,6 +256,38 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
 .day-card .d-plan { font-size: 14px; margin: 6px 0; white-space: pre-wrap; }
 .day-card .d-row { font-size: 13px; color: var(--text-dim); margin-top: 4px; display: flex; gap: 6px; }
 .day-card .d-row .d-ico { flex: none; }
+.phase-card { margin-bottom: 12px; }
+.phase-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.phase-item {
+  display: flex; align-items: center; gap: 9px; min-width: 0;
+  padding: 10px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--brand-soft);
+}
+.phase-meet { border-color: var(--accent); }
+.phase-icon { font-size: 20px; flex: none; }
+.phase-text { min-width: 0; font-size: 13px; }
+.phase-text b, .phase-text small { display: block; }
+.phase-text b span { display: block; color: var(--brand); font-size: 11px; }
+.phase-text small { color: var(--text-dim); margin-top: 2px; }
+.day-milestone {
+  margin: 7px 0; padding: 7px 10px; border-left: 4px solid var(--accent);
+  border-radius: 7px; background: var(--brand-soft); font-weight: 800; font-size: 13px;
+}
+.day-travelers { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
+.day-travelers span {
+  padding: 2px 7px; border-radius: 999px; background: var(--brand-soft);
+  color: var(--brand); font-size: 11px; font-weight: 700;
+}
+.lodging-map {
+  flex: none; margin-left: auto; color: var(--brand); font-weight: 700;
+  font-size: 11px; text-decoration: none; white-space: nowrap;
+}
+@media (max-width: 620px) {
+  .phase-list { grid-template-columns: 1fr; }
+  .phase-item { padding: 8px 10px; }
+  .day-card .d-row { flex-wrap: wrap; }
+  .lodging-map { width: 100%; margin-left: 22px; }
+}
 .todo-card { margin-bottom: 12px; }
 .todo-list { display: grid; gap: 7px; }
 .todo-item {
