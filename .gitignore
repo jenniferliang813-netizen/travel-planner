@@ -13,3 +13,4 @@ worker/node_modules/
 
 # Private usage note containing the read key
 PRIVATE_TRIP_API.md
+private-backups/

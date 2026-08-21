@@ -1173,9 +1173,45 @@ function initRouteMap() {
     });
 }
 
-// 地點查詢連結：Google Maps 與 Naver Map（韓國當地用 Naver 導航較準）
+// 地點查詢連結：Google Maps 與 Naver Map（單趟旅行可用 mapLinks.naver=false 隱藏 Naver）
 function gmapUrl(q) { return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`; }
 function nmapUrl(q) { return `https://map.naver.com/p/search/${encodeURIComponent(q)}`; }
+function showNaverMaps() { return trip?.mapLinks?.naver !== false; }
+function spotList(d) { return Array.isArray(d.spots) ? d.spots : d.spots ? [d.spots] : []; }
+
+const STATUS_LABELS = {
+  pending: "pending",
+  "weather backup": "weather backup",
+  optional: "optional",
+  "ticket pending": "ticket pending",
+};
+function statusBadge(status) {
+  if (!STATUS_LABELS[status]) return "";
+  return `<span class="status-badge status-${status.replaceAll(" ", "-")}">${STATUS_LABELS[status]}</span>`;
+}
+
+function todoItems() {
+  return Object.entries(trip.todos || {})
+    .map(([id, item]) => ({ id, ...item }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+function todoCard() {
+  const items = todoItems();
+  return `<div class="card todo-card">
+    <div class="card-head">
+      <h2>🔔 待辦提醒</h2>
+      <button class="edit-btn" id="todo-add">＋ 新增</button>
+    </div>
+    ${items.length
+      ? `<div class="todo-list">${items.map((item) => `<div class="todo-item ${item.done ? "done" : ""}">
+          <input type="checkbox" data-todotoggle="${item.id}" ${item.done ? "checked" : ""} />
+          <div class="todo-text"><b>${esc(item.text)}</b>${item.note ? `<span>${esc(item.note)}</span>` : ""}</div>
+          <button class="mini-btn" data-edittodo="${item.id}">✏️</button>
+        </div>`).join("")}</div>`
+      : `<div class="empty">目前沒有待辦提醒</div>`}
+  </div>`;
+}
 
 function mapEmbed(query) {
   const q = query || trip.destination || trip.name;
@@ -1184,7 +1220,7 @@ function mapEmbed(query) {
     <iframe class="map-frame" src="${src}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
     <div class="map-hint">📍 ${esc(q)}（點行程裡的地點可切換）</div>
     <a class="map-open-link" href="${gmapUrl(q)}" target="_blank" rel="noopener">在 Google Maps App 開啟 →</a>
-    <a class="map-open-link" href="${nmapUrl(q)}" target="_blank" rel="noopener">在 Naver Map 開啟 →</a>`;
+    ${showNaverMaps() ? `<a class="map-open-link" href="${nmapUrl(q)}" target="_blank" rel="noopener">在 Naver Map 開啟 →</a>` : ""}`;
 }
 
 function pageOutline() {
@@ -1204,10 +1240,10 @@ function pageOutline() {
             ${d.plan ? `<div class="d-plan">${esc(d.plan)}</div>` : ""}
             ${d.transport ? `<div class="d-row"><span class="d-ico">🚃</span><span>${esc(d.transport)}</span></div>` : ""}
             ${d.lodging ? `<div class="d-row"><span class="d-ico">🏨</span><span>${esc(d.lodging)}</span></div>` : ""}
-            <div>${(d.spots || [])
+            <div>${spotList(d)
               .map(
                 (s) =>
-                  `<span class="spot-wrap"><button class="spot-chip ${view.mapQuery === s ? "active" : ""}" data-spot="${esc(s)}">📍 ${esc(s)}</button><a class="spot-naver" href="${nmapUrl(s)}" target="_blank" rel="noopener" title="在 Naver Map 開啟：${esc(s)}">N</a></span>`
+                  `<span class="spot-wrap"><button class="spot-chip ${view.mapQuery === s ? "active" : ""}" data-spot="${esc(s)}">📍 ${esc(s)}</button>${showNaverMaps() ? `<a class="spot-naver" href="${nmapUrl(s)}" target="_blank" rel="noopener" title="在 Naver Map 開啟：${esc(s)}">N</a>` : ""}</span>`
               )
               .join("")}</div>
           </div>`
@@ -1223,10 +1259,10 @@ function pageOutline() {
         <div class="rt-legend">${trip.route
           .map((p, i) => `<span class="rt-leg-item"><b>${i + 1}</b>${esc(p.name)}${p.d ? `<i>・${esc(p.d)}</i>` : ""}</span>`)
           .join("")}</div>
-        <div class="map-hint">實線＝移動路線、虛線＝一日遊/飛行段。點 📍 開 Google Maps、點 N 開 Naver Map。</div>
+        <div class="map-hint">實線＝移動路線、虛線＝一日遊/飛行段。點 📍 開 Google Maps${showNaverMaps() ? "、點 N 開 Naver Map" : ""}。</div>
       </div>`
     : `<div class="card">${mapEmbed(view.mapQuery)}</div>`;
-  return `<div class="outline-layout">
+  return `${todoCard()}<div class="outline-layout">
     <div>${left}</div>
     <div class="map-panel">${mapCard}</div>
   </div>`;
@@ -1253,7 +1289,49 @@ function bindOutline() {
       }
     })
   );
+  document.getElementById("todo-add")?.addEventListener("click", () => openTodoModal());
+  document.querySelectorAll("[data-todotoggle]").forEach((cb) =>
+    cb.addEventListener("change", async () => {
+      await store.updateTrip(currentTripId, { [`todos.${cb.dataset.todotoggle}.done`]: cb.checked });
+    })
+  );
+  document.querySelectorAll("[data-edittodo]").forEach((b) =>
+    b.addEventListener("click", () => openTodoModal(b.dataset.edittodo))
+  );
   initRouteMap();
+}
+
+function openTodoModal(editId) {
+  const item = editId ? (trip.todos || {})[editId] : null;
+  const nextOrder = Math.max(0, ...todoItems().map((x) => x.order ?? 0)) + 1;
+  openModal(`
+    <h3>${item ? "編輯待辦" : "新增待辦"}</h3>
+    <div class="field"><label>待辦內容 *</label><input id="td-text" value="${esc(item ? item.text || "" : "")}" placeholder="例：購買博物館門票" /></div>
+    <div class="field"><label>備註</label><input id="td-note" value="${esc(item ? item.note || "" : "")}" placeholder="例：目標 09:00 場次" /></div>
+    <div class="btn-row">
+      ${item ? `<button class="btn danger" id="td-del">刪除</button>` : ""}
+      <button class="btn secondary" id="td-cancel">取消</button>
+      <button class="btn" id="td-save">儲存</button>
+    </div>
+  `, (el) => {
+    el.querySelector("#td-cancel").addEventListener("click", closeModal);
+    el.querySelector("#td-del")?.addEventListener("click", async () => {
+      if (!confirm("刪除這項待辦？")) return;
+      await store.updateTrip(currentTripId, { [`todos.${editId}`]: DELETE });
+      closeModal();
+    });
+    el.querySelector("#td-save").addEventListener("click", async () => {
+      const text = el.querySelector("#td-text").value.trim();
+      if (!text) return alert("請填待辦內容");
+      await store.updateTrip(currentTripId, { [`todos.${editId || uid()}`]: {
+        text,
+        note: el.querySelector("#td-note").value.trim(),
+        order: item ? item.order ?? nextOrder : nextOrder,
+        done: item ? !!item.done : false,
+      }});
+      closeModal();
+    });
+  });
 }
 
 function openDayModal(editId) {
@@ -1270,7 +1348,7 @@ function openDayModal(editId) {
     <div class="field"><label>交通</label><input id="dy-trans" value="${esc(d ? d.transport || "" : "")}" placeholder="例：地鐵銀座線一日券" /></div>
     <div class="field"><label>住宿</label><input id="dy-lodge" value="${esc(d ? d.lodging || "" : "")}" placeholder="例：上野 APA Hotel" /></div>
     <div class="field"><label>地圖大點（用逗號或頓號分隔，會變成可點的地圖標籤）</label>
-      <input id="dy-spots" value="${esc(d ? (d.spots || []).join("、") : "")}" placeholder="例：淺草寺、晴空塔、上野APA Hotel" /></div>
+      <input id="dy-spots" value="${esc(d ? spotList(d).join("、") : "")}" placeholder="例：淺草寺、晴空塔、上野APA Hotel" /></div>
     <div class="btn-row">
       ${d ? `<button class="btn danger" id="dy-del">刪除這天</button>` : ""}
       <button class="btn secondary" id="dy-cancel">取消</button>
@@ -1347,9 +1425,9 @@ function pageDay() {
                 .map(
                   (r) => `<tr>
                     <td class="s-time">${esc(r.time || "—")}</td>
-                    <td class="s-act">${esc(r.act || "")}${
+                    <td class="s-act">${esc(r.act || "")}${statusBadge(r.status)}${
                       r.place
-                        ? ` <a class="s-map" href="${gmapUrl(r.place)}" target="_blank" rel="noopener" title="在 Google Maps 開啟：${esc(r.place)}">📍</a><a class="s-map s-naver" href="${nmapUrl(r.place)}" target="_blank" rel="noopener" title="在 Naver Map 開啟：${esc(r.place)}">N</a>`
+                        ? ` <a class="s-map" href="${gmapUrl(r.place)}" target="_blank" rel="noopener" title="在 Google Maps 開啟：${esc(r.place)}">📍</a>${showNaverMaps() ? `<a class="s-map s-naver" href="${nmapUrl(r.place)}" target="_blank" rel="noopener" title="在 Naver Map 開啟：${esc(r.place)}">N</a>` : ""}`
                         : ""
                     }</td>
                     <td class="s-trans">${esc(r.stay || "")}</td>
@@ -1404,6 +1482,11 @@ function openSchedModal(editId) {
     <div class="field"><label>地點（填了會出現 📍 可開 Google Maps）</label><input id="sc-place" value="${esc(r ? r.place || "" : "")}" placeholder="例：Trinity College Dublin" /></div>
     <div class="field"><label>交通</label><input id="sc-trans" value="${esc(r ? r.trans || "" : "")}" placeholder="例：大江戶線 築地市場站" /></div>
     <div class="field"><label>備註</label><input id="sc-note" value="${esc(r ? r.note || "" : "")}" placeholder="例：週三公休" /></div>
+    <div class="field"><label>狀態</label><select id="sc-status">
+      ${["", "pending", "weather backup", "optional", "ticket pending"]
+        .map((status) => `<option value="${status}" ${status === (r ? r.status || "" : "") ? "selected" : ""}>${status || "已確認／不標示"}</option>`)
+        .join("")}
+    </select></div>
     <div class="btn-row">
       <button class="btn secondary" id="sc-cancel">取消</button>
       <button class="btn" id="sc-save">儲存</button>
@@ -1423,6 +1506,7 @@ function openSchedModal(editId) {
           place: el.querySelector("#sc-place").value.trim(),
           trans: el.querySelector("#sc-trans").value.trim(),
           note: el.querySelector("#sc-note").value.trim(),
+          status: el.querySelector("#sc-status").value,
         },
       });
       view.schedDay = dayId;

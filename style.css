@@ -256,6 +256,33 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
 .day-card .d-plan { font-size: 14px; margin: 6px 0; white-space: pre-wrap; }
 .day-card .d-row { font-size: 13px; color: var(--text-dim); margin-top: 4px; display: flex; gap: 6px; }
 .day-card .d-row .d-ico { flex: none; }
+.todo-card { margin-bottom: 12px; }
+.todo-list { display: grid; gap: 7px; }
+.todo-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--brand-soft);
+}
+.todo-item input { width: 18px; height: 18px; flex: none; accent-color: var(--brand); }
+.todo-text { min-width: 0; flex: 1; font-size: 13px; }
+.todo-text b { display: block; }
+.todo-text span { display: block; color: var(--text-dim); margin-top: 2px; }
+.todo-item.done .todo-text { text-decoration: line-through; opacity: .58; }
+.status-badge {
+  display: inline-block; margin-left: 6px; padding: 2px 6px;
+  border-radius: 999px; font-size: 10px; font-weight: 800;
+  line-height: 1.4; vertical-align: 1px; white-space: nowrap;
+}
+.status-pending { color: #92400e; background: #fef3c7; }
+.status-weather-backup { color: #1e3a8a; background: #dbeafe; }
+.status-optional { color: #5b21b6; background: #ede9fe; }
+.status-ticket-pending { color: #9f1239; background: #ffe4e6; }
+@media (prefers-color-scheme: dark) {
+  .status-pending { color: #fde68a; background: #78350f; }
+  .status-weather-backup { color: #bfdbfe; background: #1e3a8a; }
+  .status-optional { color: #ddd6fe; background: #4c1d95; }
+  .status-ticket-pending { color: #fecdd3; background: #881337; }
+}
 .spot-chip {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 12px; margin: 3px 4px 0 0;
