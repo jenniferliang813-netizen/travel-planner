@@ -431,3 +431,42 @@ table.sched td.s-ops { white-space: nowrap; text-align: right; }
 .check-pill.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); font-weight: 700; }
 .form-hint { font-size: 12px; color: var(--text-dim); margin-top: -6px; margin-bottom: 10px; }
 .divider { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
+
+/* ---- 住宿比較卡（行程大綱頁；trip.stays）---- */
+.stay-card { margin-bottom: 12px; }
+.stay-group + .stay-group { margin-top: 12px; }
+.stay-group-title { font-size: 13px; font-weight: 800; color: var(--brand); margin-bottom: 7px; }
+.stay-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 9px; }
+.stay-item {
+  min-width: 0; padding: 10px 11px; border: 1px solid var(--line);
+  border-radius: 11px; background: var(--brand-soft);
+}
+.stay-item.stay-picked, .stay-item.stay-booked { border-color: var(--brand); }
+.stay-item.stay-dropped { opacity: .55; }
+.stay-top { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.stay-top b { font-size: 14px; flex: 1; min-width: 0; word-break: break-word; }
+.stay-top .mini-btn { flex: none; }
+.stay-badge {
+  flex: none; padding: 2px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 800; white-space: nowrap;
+}
+.stay-b-holding { color: #92400e; background: #fef3c7; }
+.stay-b-compare { color: #1e3a8a; background: #dbeafe; }
+.stay-b-booked { color: #065f46; background: #d1fae5; }
+.stay-b-picked { color: #065f46; background: #a7f3d0; }
+.stay-b-dropped { color: #57534e; background: #e7e5e4; }
+@media (prefers-color-scheme: dark) {
+  .stay-b-holding { color: #fde68a; background: #78350f; }
+  .stay-b-compare { color: #bfdbfe; background: #1e3a8a; }
+  .stay-b-booked { color: #a7f3d0; background: #064e3b; }
+  .stay-b-picked { color: #d1fae5; background: #047857; }
+  .stay-b-dropped { color: #d6d3d1; background: #44403c; }
+}
+.stay-area { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+.stay-line {
+  display: flex; gap: 6px; margin-top: 5px;
+  font-size: 12.5px; line-height: 1.5; white-space: pre-wrap;
+}
+.stay-line span:first-child { flex: none; }
+.stay-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 7px; }
+.stay-links a { color: var(--brand); font-size: 11.5px; font-weight: 700; text-decoration: none; white-space: nowrap; }

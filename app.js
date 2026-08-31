@@ -497,6 +497,7 @@ function openNewTripModal() {
         pax: {}, // 每位旅客各自的航班與機場交通（key=uid，name 存在值裡）
         luggage,
         shopping: {}, // 採購清單（共用勾選，key=uid）
+        stays: {}, // 住宿比較候選（key=uid）
         days: {},
         sched: {},
         exp: {},
@@ -1231,6 +1232,129 @@ function todoCard() {
   </div>`;
 }
 
+// ---- 住宿比較卡（同一段行程有多個住宿候選時用；trip.stays 為空就只剩一行標題）----
+// trip.stays = { <uid>: {group, name, area, order, status, place, link, pros, cons, todo} }
+// group ＝ 分組標題（例「中部 11/26-11/28（3 選 1）」）；分組順序＝依 order 排序後第一次出現的順序
+const STAY_STATUS = {
+  holding: { label: "保留中", cls: "holding" },
+  compare: { label: "比較中", cls: "compare" },
+  booked: { label: "已預訂", cls: "booked" },
+  picked: { label: "已選定", cls: "picked" },
+  dropped: { label: "已放棄", cls: "dropped" },
+};
+
+function stayItems() {
+  return Object.entries(trip.stays || {})
+    .map(([id, s]) => ({ id, ...s }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+function stayBlock(s) {
+  const st = STAY_STATUS[s.status] || null;
+  return `<div class="stay-item${st ? ` stay-${st.cls}` : ""}">
+    <div class="stay-top">
+      <b>${esc(s.name || "")}</b>
+      ${st ? `<span class="stay-badge stay-b-${st.cls}">${st.label}</span>` : ""}
+      <button class="mini-btn" data-editstay="${s.id}">✏️</button>
+    </div>
+    ${s.area ? `<div class="stay-area">${esc(s.area)}</div>` : ""}
+    ${s.pros ? `<div class="stay-line"><span>👍</span><span>${esc(s.pros)}</span></div>` : ""}
+    ${s.cons ? `<div class="stay-line"><span>⚠️</span><span>${esc(s.cons)}</span></div>` : ""}
+    ${s.todo ? `<div class="stay-line"><span>📝</span><span>${esc(s.todo)}</span></div>` : ""}
+    ${s.place || s.link ? `<div class="stay-links">
+      ${s.place ? `<a href="${gmapUrl(s.place)}" target="_blank" rel="noopener">📍 Google Maps</a>` : ""}
+      ${s.link ? `<a href="${esc(s.link)}" target="_blank" rel="noopener">🔗 訂房頁</a>` : ""}
+    </div>` : ""}
+  </div>`;
+}
+
+function stayCard() {
+  const items = stayItems();
+  const groups = [];
+  items.forEach((s) => {
+    const g = s.group || "住宿候選";
+    if (!groups.includes(g)) groups.push(g);
+  });
+  return `<div class="card stay-card">
+    <div class="card-head">
+      <h2>🏨 住宿比較</h2>
+      <button class="edit-btn" id="stay-add">＋ 新增</button>
+    </div>
+    ${items.length
+      ? groups.map((g) => `<div class="stay-group">
+          <div class="stay-group-title">${esc(g)}</div>
+          <div class="stay-grid">${items.filter((s) => (s.group || "住宿候選") === g).map(stayBlock).join("")}</div>
+        </div>`).join("")
+      : `<div class="empty">還沒有住宿候選（同一段有多個方案時可在這裡並排比較）</div>`}
+  </div>`;
+}
+
+function openStayModal(editId) {
+  const s = editId ? (trip.stays || {})[editId] : null;
+  const items = stayItems();
+  const groups = [...new Set(items.map((x) => x.group || "住宿候選"))];
+  const groupOptions = (groups.length ? groups : ["住宿候選"])
+    .map((g) => `<option ${s && (s.group || "住宿候選") === g ? "selected" : ""}>${esc(g)}</option>`)
+    .join("");
+  const statusOptions = Object.entries(STAY_STATUS)
+    .map(([key, v]) => `<option value="${key}" ${s && s.status === key ? "selected" : ""}>${v.label}</option>`)
+    .join("");
+  openModal(`
+    <h3>${s ? "編輯住宿候選" : "新增住宿候選"}</h3>
+    <div class="field"><label>住宿名稱 *</label><input id="st-name" value="${esc(s ? s.name || "" : "")}" placeholder="例：Kafuu Resort Fuchaku Condo Hotel" /></div>
+    <div class="field"><label>比較分組</label>
+      <select id="st-group">${groupOptions}<option value="__new__">＋ 新分組…</option></select>
+    </div>
+    <div class="field" id="st-newgroup-wrap" style="display:none"><label>新分組（建議寫「地區 日期（幾選一）」）</label><input id="st-newgroup" placeholder="例：中部 11/26-11/28（3 選 1）" /></div>
+    <div class="field"><label>狀態</label>
+      <select id="st-status"><option value="">（不標示）</option>${statusOptions}</select>
+    </div>
+    <div class="field"><label>地區／地址</label><input id="st-area" value="${esc(s ? s.area || "" : "")}" placeholder="例：恩納村・海景度假型" /></div>
+    <div class="field"><label>優點</label><textarea id="st-pros" rows="2" placeholder="例：房間大、前往北部順路">${esc(s ? s.pros || "" : "")}</textarea></div>
+    <div class="field"><label>顧慮</label><textarea id="st-cons" rows="2" placeholder="例：評價提到床墊偏軟">${esc(s ? s.cons || "" : "")}</textarea></div>
+    <div class="field"><label>待確認</label><textarea id="st-todo" rows="2" placeholder="例：正式床位、取消期限、停車方式">${esc(s ? s.todo || "" : "")}</textarea></div>
+    <div class="field"><label>Google Maps 查詢字（選填）</label><input id="st-place" value="${esc(s ? s.place || "" : "")}" placeholder="例：Kafuu Resort Fuchaku Condo Hotel Onna" /></div>
+    <div class="field"><label>訂房／參考連結（選填）</label><input id="st-link" value="${esc(s ? s.link || "" : "")}" placeholder="貼訂房頁網址，卡片上會出現 🔗" /></div>
+    <div class="btn-row">
+      ${s ? `<button class="btn danger" id="st-del">刪除</button>` : ""}
+      <button class="btn secondary" id="st-cancel">取消</button>
+      <button class="btn" id="st-save">儲存</button>
+    </div>
+  `, (el) => {
+    el.querySelector("#st-group").addEventListener("change", (e) => {
+      el.querySelector("#st-newgroup-wrap").style.display = e.target.value === "__new__" ? "" : "none";
+    });
+    el.querySelector("#st-cancel").addEventListener("click", closeModal);
+    el.querySelector("#st-del")?.addEventListener("click", async () => {
+      if (!confirm("刪除這個住宿候選？")) return;
+      await store.updateTrip(currentTripId, { [`stays.${editId}`]: DELETE });
+      closeModal();
+    });
+    el.querySelector("#st-save").addEventListener("click", async () => {
+      const name = el.querySelector("#st-name").value.trim();
+      if (!name) return alert("請填住宿名稱");
+      let group = el.querySelector("#st-group").value;
+      if (group === "__new__") group = el.querySelector("#st-newgroup").value.trim() || "住宿候選";
+      const maxOrder = Math.max(0, ...items.map((x) => x.order ?? 0));
+      await store.updateTrip(currentTripId, {
+        [`stays.${editId || uid()}`]: {
+          group,
+          name,
+          area: el.querySelector("#st-area").value.trim(),
+          status: el.querySelector("#st-status").value,
+          pros: el.querySelector("#st-pros").value.trim(),
+          cons: el.querySelector("#st-cons").value.trim(),
+          todo: el.querySelector("#st-todo").value.trim(),
+          place: el.querySelector("#st-place").value.trim(),
+          link: el.querySelector("#st-link").value.trim(),
+          order: s ? s.order ?? 0 : maxOrder + 1,
+        },
+      });
+      closeModal();
+    });
+  });
+}
+
 function mapEmbed(query) {
   const q = query || trip.destination || trip.name;
   const src = `https://maps.google.com/maps?q=${encodeURIComponent(q)}&output=embed&hl=zh-TW&z=13`;
@@ -1285,7 +1409,7 @@ function pageOutline() {
         <div class="map-hint">實線＝移動路線、虛線＝一日遊/飛行段。點 📍 開 Google Maps${showNaverMaps() ? "、點 N 開 Naver Map" : ""}。</div>
       </div>`
     : `<div class="card">${mapEmbed(view.mapQuery)}</div>`;
-  return `${tripPhaseCard()}${todoCard()}<div class="outline-layout">
+  return `${tripPhaseCard()}${todoCard()}${stayCard()}<div class="outline-layout">
     <div>${left}</div>
     <div class="map-panel">${mapCard}</div>
   </div>`;
@@ -1320,6 +1444,10 @@ function bindOutline() {
   );
   document.querySelectorAll("[data-edittodo]").forEach((b) =>
     b.addEventListener("click", () => openTodoModal(b.dataset.edittodo))
+  );
+  document.getElementById("stay-add")?.addEventListener("click", () => openStayModal());
+  document.querySelectorAll("[data-editstay]").forEach((b) =>
+    b.addEventListener("click", () => openStayModal(b.dataset.editstay))
   );
   initRouteMap();
 }
