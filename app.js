@@ -357,7 +357,8 @@ function seasonOf(t) {
   return "winter";
 }
 function applySeason(t) {
-  const s = t ? seasonOf(t) : "";
+  // trip.theme 可指定固定配色（例：沖繩＝米色＋珊瑚藍綠），沒設才依出發月份自動判斷季節
+  const s = t ? t.theme || seasonOf(t) : "";
   if (s) document.body.dataset.season = s;
   else document.body.removeAttribute("data-season");
 }
@@ -1270,6 +1271,7 @@ function stayBlock(s) {
 
 function stayCard() {
   const items = stayItems();
+  if (!items.length) return ""; // 沒有住宿候選就整張卡不顯示（避免其他旅行多一張空卡）
   const groups = [];
   items.forEach((s) => {
     const g = s.group || "住宿候選";
@@ -1280,12 +1282,10 @@ function stayCard() {
       <h2>🏨 住宿比較</h2>
       <button class="edit-btn" id="stay-add">＋ 新增</button>
     </div>
-    ${items.length
-      ? groups.map((g) => `<div class="stay-group">
-          <div class="stay-group-title">${esc(g)}</div>
-          <div class="stay-grid">${items.filter((s) => (s.group || "住宿候選") === g).map(stayBlock).join("")}</div>
-        </div>`).join("")
-      : `<div class="empty">還沒有住宿候選（同一段有多個方案時可在這裡並排比較）</div>`}
+    ${groups.map((g) => `<div class="stay-group">
+      <div class="stay-group-title">${esc(g)}</div>
+      <div class="stay-grid">${items.filter((s) => (s.group || "住宿候選") === g).map(stayBlock).join("")}</div>
+    </div>`).join("")}
   </div>`;
 }
 

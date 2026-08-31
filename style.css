@@ -38,6 +38,12 @@ body[data-season="winter"] { /* 冬：雪藍 */
   --bg: #eef1f6; --card: #ffffff; --text: #1f2937; --text-dim: #64748b;
   --line: #dbe2ec; --brand: #3b5aa5; --brand-soft: #e3eafa; --accent: #7c9cd6;
 }
+/* 固定配色（由 trip.theme 指定，不看月份）：沖繩＝米色＋珊瑚礁藍綠＋珊瑚橘 */
+body[data-season="okinawa"] {
+  --bg: #f7f2e7; --card: #fffdf8; --text: #2b3b41; --text-dim: #7f8f95;
+  --line: #e9ded0; --brand: #2b8b9c; --brand-soft: #ddeff1; --accent: #e8785a;
+  --shadow: 0 1px 3px rgba(60, 70, 70, 0.07), 0 4px 14px rgba(60, 70, 70, 0.05);
+}
 @media (prefers-color-scheme: dark) {
   body[data-season="autumn"] {
     --bg: #241a10; --card: #342615; --text: #f2e5d3; --text-dim: #bfa084;
@@ -50,6 +56,11 @@ body[data-season="winter"] { /* 冬：雪藍 */
   body[data-season="winter"] {
     --bg: #141a24; --card: #1f2836; --text: #e2e8f0; --text-dim: #93a5bd;
     --line: #31405a; --brand: #7fa3e8; --brand-soft: #243a5e; --accent: #9db8e8;
+  }
+  body[data-season="okinawa"] {
+    --bg: #15232a; --card: #1f2f37; --text: #ece3d5; --text-dim: #9aacb2;
+    --line: #33454d; --brand: #4fc3d4; --brand-soft: #1c4650; --accent: #f08a6c;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   }
 }
 /* ===== 首頁「總表」文青主題（莫蘭迪奶茶），只套用在 body[data-home] ===== */
