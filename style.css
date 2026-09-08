@@ -317,14 +317,20 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
   line-height: 1.4; vertical-align: 1px; white-space: nowrap;
 }
 .status-pending { color: #92400e; background: #fef3c7; }
+.status-weather-dependent { color: #155e75; background: #cffafe; }
 .status-weather-backup { color: #1e3a8a; background: #dbeafe; }
+.status-backup { color: #3f3f46; background: #e4e4e7; }
 .status-optional { color: #5b21b6; background: #ede9fe; }
 .status-ticket-pending { color: #9f1239; background: #ffe4e6; }
+.status-conference { color: #14532d; background: #dcfce7; }
 @media (prefers-color-scheme: dark) {
   .status-pending { color: #fde68a; background: #78350f; }
+  .status-weather-dependent { color: #a5f3fc; background: #164e63; }
   .status-weather-backup { color: #bfdbfe; background: #1e3a8a; }
+  .status-backup { color: #d4d4d8; background: #3f3f46; }
   .status-optional { color: #ddd6fe; background: #4c1d95; }
   .status-ticket-pending { color: #fecdd3; background: #881337; }
+  .status-conference { color: #bbf7d0; background: #14532d; }
 }
 .spot-chip {
   display: inline-flex; align-items: center; gap: 4px;

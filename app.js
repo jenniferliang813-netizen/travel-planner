@@ -1201,9 +1201,12 @@ function tripPhaseCard() {
 
 const STATUS_LABELS = {
   pending: "pending",
+  "weather dependent": "weather dependent",
   "weather backup": "weather backup",
+  backup: "backup",
   optional: "optional",
   "ticket pending": "ticket pending",
+  conference: "conference",
 };
 function statusBadge(status) {
   if (!STATUS_LABELS[status]) return "";
@@ -1646,7 +1649,7 @@ function openSchedModal(editId) {
     <div class="field"><label>交通</label><input id="sc-trans" value="${esc(r ? r.trans || "" : "")}" placeholder="例：大江戶線 築地市場站" /></div>
     <div class="field"><label>備註</label><input id="sc-note" value="${esc(r ? r.note || "" : "")}" placeholder="例：週三公休" /></div>
     <div class="field"><label>狀態</label><select id="sc-status">
-      ${["", "pending", "weather backup", "optional", "ticket pending"]
+      ${["", ...Object.keys(STATUS_LABELS)]
         .map((status) => `<option value="${status}" ${status === (r ? r.status || "" : "") ? "selected" : ""}>${status || "已確認／不標示"}</option>`)
         .join("")}
     </select></div>
