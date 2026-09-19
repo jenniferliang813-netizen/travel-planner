@@ -1358,6 +1358,148 @@ function openStayModal(editId) {
   });
 }
 
+// ---- 地點座標：貼 Google Maps 網址／「緯度,經度」，或用名稱搜尋（Nominatim，免金鑰）----
+function parseLatLng(text) {
+  const s = String(text || "");
+  const pats = [/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/, /@(-?\d+\.\d+),(-?\d+\.\d+)/, /[?&](?:q|query|ll)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/, /^\s*(-?\d+\.\d+)\s*[,，]\s*(-?\d+\.\d+)\s*$/];
+  for (const re of pats) {
+    const m = s.match(re);
+    if (m) {
+      const lat = +m[1], lng = +m[2];
+      if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
+    }
+  }
+  return null;
+}
+async function geocode(q) {
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=zh-TW,en&q=${encodeURIComponent(q)}`);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return (await r.json()).map((x) => ({ label: x.display_name, lat: +(+x.lat).toFixed(5), lng: +(+x.lon).toFixed(5) }));
+}
+// 在 modal 內掛一個「地點」欄位：輸入框＋搜尋鈕＋候選清單＋目前座標顯示；回傳 getter
+function bindPlacePicker(el, prefix, init) {
+  let picked = init && Number.isFinite(init.lat) ? { lat: init.lat, lng: init.lng } : null;
+  const input = el.querySelector(`#${prefix}-q`);
+  const out = el.querySelector(`#${prefix}-res`);
+  const cur = el.querySelector(`#${prefix}-cur`);
+  const show = () => (cur.textContent = picked ? `✅ 目前座標：${picked.lat}, ${picked.lng}` : "尚未設定座標");
+  show();
+  input.addEventListener("input", () => {
+    const ll = parseLatLng(input.value);
+    if (ll) { picked = ll; out.innerHTML = ""; show(); }
+  });
+  el.querySelector(`#${prefix}-go`).addEventListener("click", async () => {
+    const q = input.value.trim();
+    if (!q) return;
+    const ll = parseLatLng(q);
+    if (ll) { picked = ll; show(); return; }
+    out.innerHTML = `<div class="form-hint">搜尋中…</div>`;
+    try {
+      const list = await geocode(q);
+      out.innerHTML = list.length
+        ? list.map((x, i) => `<button type="button" class="geo-opt" data-i="${i}">📍 ${esc(x.label)}</button>`).join("")
+        : `<div class="form-hint">找不到，換英文／當地語言，或到 Google Maps 長按地點複製座標貼上</div>`;
+      out.querySelectorAll(".geo-opt").forEach((b) =>
+        b.addEventListener("click", () => {
+          picked = { lat: list[+b.dataset.i].lat, lng: list[+b.dataset.i].lng };
+          out.innerHTML = "";
+          show();
+        })
+      );
+    } catch {
+      out.innerHTML = `<div class="form-hint">搜尋失敗（需要網路）</div>`;
+    }
+  });
+  return { get: () => picked, clear: () => { picked = null; show(); } };
+}
+function placeField(prefix, label, hint) {
+  return `<div class="field"><label>${label}</label>
+    <div class="geo-bar"><input id="${prefix}-q" placeholder="地名搜尋，或貼 Google Maps 網址／座標" /><button type="button" class="btn secondary" id="${prefix}-go">搜尋</button></div>
+    <div id="${prefix}-res" class="geo-res"></div>
+    <div class="form-hint geo-cur" id="${prefix}-cur"></div>
+    ${hint ? `<p class="form-hint">${hint}</p>` : ""}</div>`;
+}
+
+// ---- 行程簡圖編輯（route 陣列整包寫回）----
+function openRouteModal() {
+  const pts = (trip.route || []).slice();
+  const save = async (arr) => { await store.updateTrip(currentTripId, { route: arr }); };
+  openModal(`
+    <h3>🗺️ 編輯行程簡圖</h3>
+    <p class="form-hint">照移動順序排列。「一日遊」點會用虛線從前一個住宿點拉出去。</p>
+    <div class="rt-edit-list">${pts.length ? pts.map((p, i) => `<div class="rt-edit-row">
+      <span class="rt-dot ${p.side ? "side" : ""}" style="position:static">${i + 1}</span>
+      <div class="rt-edit-text"><b>${esc(p.name)}</b><small>${esc([p.d, p.t].filter(Boolean).join("・"))}</small></div>
+      <button class="mini-btn" data-up="${i}" ${i ? "" : "disabled"} title="上移">↑</button>
+      <button class="mini-btn" data-down="${i}" ${i < pts.length - 1 ? "" : "disabled"} title="下移">↓</button>
+      <button class="mini-btn" data-edit="${i}" title="編輯">✏️</button>
+      <button class="mini-btn danger" data-del="${i}" title="刪除">🗑️</button>
+    </div>`).join("") : `<div class="empty" style="padding:12px">還沒有任何點</div>`}</div>
+    <div class="btn-row">
+      <button class="btn secondary" id="rt-close">關閉</button>
+      <button class="btn" id="rt-add">＋ 新增地點</button>
+    </div>
+  `, (el) => {
+    el.querySelector("#rt-close").addEventListener("click", closeModal);
+    el.querySelector("#rt-add").addEventListener("click", () => openRoutePointModal(-1));
+    const swap = async (i, j) => { [pts[i], pts[j]] = [pts[j], pts[i]]; await save(pts); openRouteModal(); };
+    el.querySelectorAll("[data-up]").forEach((b) => b.addEventListener("click", () => swap(+b.dataset.up, +b.dataset.up - 1)));
+    el.querySelectorAll("[data-down]").forEach((b) => b.addEventListener("click", () => swap(+b.dataset.down, +b.dataset.down + 1)));
+    el.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => openRoutePointModal(+b.dataset.edit)));
+    el.querySelectorAll("[data-del]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        const i = +b.dataset.del;
+        if (!confirm(`從簡圖刪除「${pts[i].name}」？`)) return;
+        pts.splice(i, 1);
+        await save(pts);
+        openRouteModal();
+      })
+    );
+  });
+}
+function openRoutePointModal(idx) {
+  const pts = (trip.route || []).slice();
+  const p = idx >= 0 ? pts[idx] : {};
+  openModal(`
+    <h3>${idx >= 0 ? `編輯第 ${idx + 1} 點` : "新增地點"}</h3>
+    <div class="field"><label>名稱</label><input id="rp-name" value="${esc(p.name || "")}" placeholder="例：根特 Ghent" /></div>
+    ${placeField("rp", "位置", "手機 Google Maps：長按地圖放大頭針 → 上方搜尋列會出現座標，複製貼上即可。")}
+    <div class="field-row">
+      <div class="field"><label>第幾天</label><input id="rp-d" value="${esc(p.d || "")}" placeholder="例：Day 9-11" /></div>
+      <div class="field"><label>從上一點的交通</label><input id="rp-t" value="${esc(p.t || "")}" placeholder="例：火車 2h11" /></div>
+    </div>
+    <p class="form-hint">「第幾天」用 Day 數字（例：Day 3、Day 9-11）——每日行程頁的天氣會依這欄找地點；寫「備案／Backup」的點不抓天氣。</p>
+    <div class="field">
+      <label><input type="checkbox" id="rp-side" ${p.side ? "checked" : ""} /> 一日遊（不是住宿點，從前一個住宿點虛線拉出）</label>
+      <label><input type="checkbox" id="rp-fly" ${p.fly ? "checked" : ""} /> 前一段是飛機（點狀線）</label>
+    </div>
+    <div class="btn-row">
+      <button class="btn secondary" id="rp-cancel">返回</button>
+      <button class="btn" id="rp-save">儲存</button>
+    </div>
+  `, (el) => {
+    const picker = bindPlacePicker(el, "rp", p);
+    el.querySelector("#rp-cancel").addEventListener("click", openRouteModal);
+    el.querySelector("#rp-save").addEventListener("click", async () => {
+      const name = el.querySelector("#rp-name").value.trim();
+      const ll = picker.get();
+      if (!name) return alert("請填名稱");
+      if (!ll) return alert("請先設定位置（搜尋後點選候選，或貼座標）");
+      const np = { name, lat: ll.lat, lng: ll.lng };
+      const d = el.querySelector("#rp-d").value.trim();
+      const t = el.querySelector("#rp-t").value.trim();
+      if (d) np.d = d;
+      if (t) np.t = t;
+      if (el.querySelector("#rp-side").checked) np.side = true;
+      if (el.querySelector("#rp-fly").checked) np.fly = true;
+      if (idx >= 0) pts[idx] = np;
+      else pts.push(np);
+      await store.updateTrip(currentTripId, { route: pts });
+      openRouteModal();
+    });
+  });
+}
+
 function mapEmbed(query) {
   const q = query || trip.destination || trip.name;
   const src = `https://maps.google.com/maps?q=${encodeURIComponent(q)}&output=embed&hl=zh-TW&z=13`;
@@ -1404,14 +1546,14 @@ function pageOutline() {
   const hasRoute = (trip.route || []).length > 0;
   const mapCard = hasRoute
     ? `<div class="card">
-        <div class="card-head"><h2>🗺️ 行程簡圖</h2></div>
+        <div class="card-head"><h2>🗺️ 行程簡圖</h2><button class="edit-btn" id="route-edit">編輯</button></div>
         <div id="route-map" class="map-frame"></div>
         <div class="rt-legend">${trip.route
           .map((p, i) => `<span class="rt-leg-item"><b>${i + 1}</b>${esc(p.name)}${p.d ? `<i>・${esc(p.d)}</i>` : ""}</span>`)
           .join("")}</div>
         <div class="map-hint">實線＝移動路線、虛線＝一日遊/飛行段。點 📍 開 Google Maps${showNaverMaps() ? "、點 N 開 Naver Map" : ""}。</div>
       </div>`
-    : `<div class="card">${mapEmbed(view.mapQuery)}</div>`;
+    : `<div class="card">${mapEmbed(view.mapQuery)}<button class="edit-btn" id="route-edit" style="margin-top:8px">🗺️ 建立行程簡圖</button></div>`;
   return `${tripPhaseCard()}${todoCard()}${stayCard()}<div class="outline-layout">
     <div>${left}</div>
     <div class="map-panel">${mapCard}</div>
@@ -1452,6 +1594,7 @@ function bindOutline() {
   document.querySelectorAll("[data-editstay]").forEach((b) =>
     b.addEventListener("click", () => openStayModal(b.dataset.editstay))
   );
+  document.getElementById("route-edit")?.addEventListener("click", openRouteModal);
   initRouteMap();
 }
 
@@ -1510,6 +1653,10 @@ function openDayModal(editId) {
     <div class="field"><label>住宿 Google Maps 查詢字（選填）</label><input id="dy-lodge-place" value="${esc(d ? d.lodgingPlace || "" : "")}" placeholder="例：APA Hotel Ueno Ekimae Tokyo" /></div>
     <div class="field"><label>地圖大點（用逗號或頓號分隔，會變成可點的地圖標籤）</label>
       <input id="dy-spots" value="${esc(d ? spotList(d).join("、") : "")}" placeholder="例：淺草寺、晴空塔、上野APA Hotel" /></div>
+    <details class="wx-override"${d && d.wx ? " open" : ""}><summary>🌤️ 天氣預報地點（選填，預設自動用行程簡圖）</summary>
+      <div class="field"><label>地點名稱（清空＝改回自動）</label><input id="dywx-name" value="${esc(d && d.wx ? d.wx.name || "" : "")}" placeholder="例：阿姆斯特丹" /></div>
+      ${placeField("dywx", "位置")}
+    </details>
     <div class="btn-row">
       ${d ? `<button class="btn danger" id="dy-del">刪除這天</button>` : ""}
       <button class="btn secondary" id="dy-cancel">取消</button>
@@ -1517,6 +1664,7 @@ function openDayModal(editId) {
     </div>
   `, (el) => {
     bindPills(el);
+    const wxPicker = bindPlacePicker(el, "dywx", d && d.wx);
     el.querySelector("#dy-cancel").addEventListener("click", closeModal);
     if (d)
       el.querySelector("#dy-del").addEventListener("click", async () => {
@@ -1527,6 +1675,9 @@ function openDayModal(editId) {
     el.querySelector("#dy-save").addEventListener("click", async () => {
       const spots = el.querySelector("#dy-spots").value.split(/[,、，]+/).map((s) => s.trim()).filter(Boolean);
       const travelers = [...el.querySelectorAll('input[name="dy-travelers"]:checked')].map((input) => input.value);
+      const wxName = el.querySelector("#dywx-name").value.trim();
+      const wxLL = wxPicker.get();
+      if (wxName && !wxLL) return alert("天氣地點：請先搜尋並點選位置，或清空名稱改回自動");
       await store.updateTrip(currentTripId, {
         [`days.${editId || uid()}`]: {
           n: (() => { const v = parseInt(el.querySelector("#dy-n").value, 10); return Number.isFinite(v) && v >= 1 ? v : nextN; })(),
@@ -1538,11 +1689,160 @@ function openDayModal(editId) {
           transport: el.querySelector("#dy-trans").value.trim(),
           lodging: el.querySelector("#dy-lodge").value.trim(),
           lodgingPlace: el.querySelector("#dy-lodge-place").value.trim(),
+          ...(wxName ? { wx: { name: wxName, lat: wxLL.lat, lng: wxLL.lng } } : {}),
           spots,
         },
       });
       closeModal();
     });
+  });
+}
+
+// ---------------------------------------------------------------------
+// 天氣預報（每日行程頁置頂；打開頁面時即時向 Open-Meteo 抓，免金鑰）
+// 地點：day.wx {name,lat,lng} 手動指定 > route 中 d 含這天的點（住宿點＋當天一日遊）
+// 模型：依座標選當地氣象局的模型；缺降雨機率時用 best_match 補
+// ---------------------------------------------------------------------
+const WX_SOURCES = [
+  // 粗略的國界框，順序有意義（先比對較小/重疊的區域）
+  { test: (la, ln) => la > 33 && la < 38.7 && ln > 124.5 && ln < 129.65, model: "kma_seamless", label: "韓國氣象廳 KMA" },
+  { test: (la, ln) => la > 24 && la < 46 && ln > 122 && ln < 146, model: "jma_seamless", label: "日本氣象廳 JMA" },
+  { test: (la, ln) => la > 51.3 && la < 55.5 && ln > -10.8 && ln < -5.4, model: "knmi_seamless", label: "HARMONIE（愛爾蘭／荷蘭氣象局共用模型）" },
+  { test: (la, ln) => la > 49.4 && la < 51.35 && ln > 2.5 && ln < 6.5, model: "knmi_seamless", label: "KNMI HARMONIE（比利時氣象局無開放介面）" },
+  { test: (la, ln) => la > 50.7 && la < 53.7 && ln > 3.3 && ln < 7.3, model: "knmi_seamless", label: "荷蘭氣象局 KNMI" },
+  { test: () => true, model: "best_match", label: "Open-Meteo 綜合模型" },
+];
+const WX_CODES = {
+  0: ["☀️", "晴"], 1: ["🌤️", "晴時多雲"], 2: ["⛅", "多雲"], 3: ["☁️", "陰"],
+  45: ["🌫️", "霧"], 48: ["🌫️", "霧凇"],
+  51: ["🌦️", "毛毛雨"], 53: ["🌦️", "毛毛雨"], 55: ["🌧️", "較強毛毛雨"], 56: ["🌧️", "凍毛毛雨"], 57: ["🌧️", "凍毛毛雨"],
+  61: ["🌦️", "小雨"], 63: ["🌧️", "中雨"], 65: ["🌧️", "大雨"], 66: ["🌧️", "凍雨"], 67: ["🌧️", "凍雨"],
+  71: ["🌨️", "小雪"], 73: ["🌨️", "中雪"], 75: ["❄️", "大雪"], 77: ["🌨️", "霰"],
+  80: ["🌦️", "陣雨"], 81: ["🌧️", "較強陣雨"], 82: ["⛈️", "豪大陣雨"], 85: ["🌨️", "陣雪"], 86: ["❄️", "大陣雪"],
+  95: ["⛈️", "雷雨"], 96: ["⛈️", "雷雨夾冰雹"], 99: ["⛈️", "強雷雨夾冰雹"],
+};
+const WX_DAYS = 16; // Open-Meteo 最多預報 16 天
+const wxCache = new Map(); // key → {ts, data} 或 {ts, promise}；同一頁面 1 小時內不重抓
+
+function isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+// 這天的實際日期：以 startDate + (n-1) 為準（day.date 在舊資料可能是「8/13(四)」這種格式）
+function dayIsoDate(d) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d.date || "")) return d.date;
+  if (!trip.startDate || !d.n) return "";
+  const t = new Date(trip.startDate + "T00:00:00");
+  t.setDate(t.getDate() + d.n - 1);
+  return isoLocal(t);
+}
+// route 的 d 欄位（「Day 2-6」「Day2-4 住宿」「Day 5 Primary」）是否含第 n 天
+function routeHasDay(p, n) {
+  const m = String(p.d || "").match(/Day\s*(\d+)(?:\s*-\s*(\d+))?/i);
+  if (!m) return false;
+  const a = +m[1], b = m[2] ? +m[2] : a;
+  return n >= a && n <= b;
+}
+function wxPlaces(d) {
+  if (d.wx && Number.isFinite(d.wx.lat)) return [{ name: d.wx.name, lat: d.wx.lat, lng: d.wx.lng }];
+  const pts = (trip.route || []).filter((p) => Number.isFinite(p.lat) && routeHasDay(p, d.n) && !/backup|備案/i.test(p.d));
+  const base = pts.filter((p) => !p.side).pop();
+  const side = pts.filter((p) => p.side).pop();
+  return [base, side].filter(Boolean).slice(0, 2);
+}
+function wxSource(lat, lng) {
+  return WX_SOURCES.find((s) => s.test(lat, lng));
+}
+function fetchWx(lat, lng) {
+  const src = wxSource(lat, lng);
+  const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+  const hit = wxCache.get(key);
+  if (hit && Date.now() - hit.ts < 3600e3) return hit.promise || Promise.resolve(hit.data);
+  const vars = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max";
+  const models = src.model === "best_match" ? "best_match" : `${src.model},best_match`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=${vars}&timezone=auto&forecast_days=${WX_DAYS}&wind_speed_unit=ms&models=${models}`;
+  const promise = fetch(url)
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
+    .then((j) => {
+      const data = { src, daily: j.daily, fetchedAt: new Date() };
+      wxCache.set(key, { ts: Date.now(), data });
+      return data;
+    })
+    .catch((e) => {
+      wxCache.delete(key);
+      throw e;
+    });
+  wxCache.set(key, { ts: Date.now(), promise });
+  return promise;
+}
+// 取某天某變數：先用當地模型，沒有（null）再用 best_match
+function wxVal(daily, name, i, model) {
+  const pick = (k) => (daily[k] && daily[k][i] != null ? daily[k][i] : null);
+  if (model === "best_match") return pick(name);
+  const own = pick(`${name}_${model}`);
+  return own != null ? own : pick(`${name}_best_match`);
+}
+function wxRow(place, data, iso) {
+  const i = data.daily.time.indexOf(iso);
+  if (i < 0) return "";
+  const m = data.src.model;
+  const v = (k) => wxVal(data.daily, k, i, m);
+  const code = v("weather_code");
+  if (code == null && v("temperature_2m_max") == null) // 預報範圍最末端常是空值
+    return `<div class="wx-row wx-loading">🌤️ ${esc(place.name || "")}：這天的預報還沒出來，過一兩天再看</div>`;
+  const [icon, label] = WX_CODES[code] || ["🌡️", "—"];
+  const r = (x) => (x == null ? "—" : Math.round(x));
+  const pop = v("precipitation_probability_max");
+  const rain = v("precipitation_sum");
+  const gust = v("wind_gusts_10m_max");
+  return `<div class="wx-row">
+    <span class="wx-icon">${icon}</span>
+    <div class="wx-main">
+      <b>${esc(place.name || "")}</b><span class="wx-label">${label}</span>
+      <div class="wx-stats">
+        <span>🌡️ ${r(v("temperature_2m_min"))}–${r(v("temperature_2m_max"))}°C</span>
+        <span>☔ ${pop == null ? "—" : r(pop) + "%"}${rain ? `（${rain.toFixed(1)} mm）` : ""}</span>
+        <span>💨 ${r(v("wind_speed_10m_max"))} m/s${gust != null ? `・陣風 ${r(gust)}` : ""}</span>
+      </div>
+    </div>
+  </div>`;
+}
+function wxCard(d) {
+  if (!d) return "";
+  const iso = dayIsoDate(d);
+  const places = wxPlaces(d);
+  if (!iso || !places.length) return "";
+  const today = isoLocal(new Date());
+  const last = new Date();
+  last.setDate(last.getDate() + WX_DAYS - 1);
+  if (iso < today) return "";
+  if (iso > isoLocal(last))
+    return `<div class="wx-card wx-far">🌤️ 天氣預報會在出發前約 2 週（${WX_DAYS} 天內）自動出現</div>`;
+  return `<div class="wx-card" id="wx-card" data-iso="${iso}">${places
+    .map((p, k) => `<div class="wx-slot" data-k="${k}"><div class="wx-row wx-loading">🌤️ 載入 ${esc(p.name || "")} 天氣…</div></div>`)
+    .join("")}<div class="wx-foot"></div></div>`;
+}
+function fillWx(d) {
+  const box = document.getElementById("wx-card");
+  if (!box || !d) return;
+  const iso = box.dataset.iso;
+  const places = wxPlaces(d);
+  const srcs = new Set();
+  let latest = null;
+  places.forEach((p, k) => {
+    fetchWx(p.lat, p.lng)
+      .then((data) => {
+        const slot = box.querySelector(`.wx-slot[data-k="${k}"]`);
+        if (!slot || !document.body.contains(box)) return;
+        slot.innerHTML = wxRow(p, data, iso) || "";
+        srcs.add(data.src.label);
+        if (!latest || data.fetchedAt > latest) latest = data.fetchedAt;
+        const hh = `${String(latest.getHours()).padStart(2, "0")}:${String(latest.getMinutes()).padStart(2, "0")}`;
+        box.querySelector(".wx-foot").textContent = `資料來源：${[...srcs].join("、")}（經 Open-Meteo）・${hh} 更新`;
+      })
+      .catch(() => {
+        const slot = box.querySelector(`.wx-slot[data-k="${k}"]`);
+        if (slot) slot.innerHTML = `<div class="wx-row wx-loading">⚠️ ${esc(p.name || "")} 天氣載入失敗（需要網路）</div>`;
+      });
   });
 }
 
@@ -1582,6 +1882,7 @@ function pageDay() {
       <div class="card-head">
         <h2>${curDay ? `Day ${curDay.n}${curDay.date ? "・" + esc(curDay.date) : ""}${curDay.title ? "・" + esc(curDay.title) : ""}` : "未分類"}</h2>
       </div>
+      ${wxCard(curDay)}
       ${curDay && curDay.lodging ? `<div class="d-row" style="margin-bottom:8px"><span class="d-ico">🏨</span><span>${esc(curDay.lodging)}</span></div>` : ""}
       ${
         shown.length
@@ -1610,6 +1911,7 @@ function pageDay() {
 }
 
 function bindDay() {
+  fillWx(dayList().find((d) => d.id === view.schedDay));
   document.querySelectorAll("[data-schedday]").forEach((b) =>
     b.addEventListener("click", () => {
       view.schedDay = b.dataset.schedday;
