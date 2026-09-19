@@ -499,6 +499,7 @@ function openNewTripModal() {
         luggage,
         shopping: {}, // 採購清單（共用勾選，key=uid）
         stays: {}, // 住宿比較候選（key=uid）
+        notes: {}, // 提醒與備註（key=uid）
         days: {},
         sched: {},
         exp: {},
@@ -1224,6 +1225,7 @@ function todoCard() {
   return `<div class="card todo-card">
     <div class="card-head">
       <h2>🔔 待辦提醒</h2>
+      ${noteItems().length ? "" : `<button class="edit-btn" id="note-add">📌 加備註</button>`}
       <button class="edit-btn" id="todo-add">＋ 新增</button>
     </div>
     ${items.length
@@ -1234,6 +1236,58 @@ function todoCard() {
         </div>`).join("")}</div>`
       : `<div class="empty">目前沒有待辦提醒</div>`}
   </div>`;
+}
+
+// ---- 提醒與備註卡（trip.notes = { <uid>: {title, body, order} }；沒有就不顯示）----
+function noteItems() {
+  return Object.entries(trip.notes || {})
+    .map(([id, n]) => ({ id, ...n }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+function noteCard() {
+  const items = noteItems();
+  if (!items.length) return "";
+  return `<div class="card note-card">
+    <div class="card-head">
+      <h2>📌 提醒與備註</h2>
+      <button class="edit-btn" id="note-add">＋ 新增</button>
+    </div>
+    <div class="note-list">${items.map((n) => `<details class="note-item">
+      <summary><span>${esc(n.title || "")}</span><button class="mini-btn" data-editnote="${n.id}">✏️</button></summary>
+      <div class="note-body">${esc(n.body || "")}</div>
+    </details>`).join("")}</div>
+  </div>`;
+}
+function openNoteModal(editId) {
+  const item = editId ? (trip.notes || {})[editId] : null;
+  const nextOrder = Math.max(0, ...noteItems().map((x) => x.order ?? 0)) + 1;
+  openModal(`
+    <h3>${item ? "編輯提醒" : "新增提醒"}</h3>
+    <div class="field"><label>標題 *</label><input id="nt-title" value="${esc(item ? item.title || "" : "")}" placeholder="例：⛰️ 阿蘇冬季提醒" /></div>
+    <div class="field"><label>內容（可多行，一行一點）</label><textarea id="nt-body" rows="8">${esc(item ? item.body || "" : "")}</textarea></div>
+    <div class="btn-row">
+      ${item ? `<button class="btn danger" id="nt-del">刪除</button>` : ""}
+      <button class="btn secondary" id="nt-cancel">取消</button>
+      <button class="btn" id="nt-save">儲存</button>
+    </div>
+  `, (el) => {
+    el.querySelector("#nt-cancel").addEventListener("click", closeModal);
+    el.querySelector("#nt-del")?.addEventListener("click", async () => {
+      if (!confirm("刪除這則提醒？")) return;
+      await store.updateTrip(currentTripId, { [`notes.${editId}`]: DELETE });
+      closeModal();
+    });
+    el.querySelector("#nt-save").addEventListener("click", async () => {
+      const title = el.querySelector("#nt-title").value.trim();
+      if (!title) return alert("請填標題");
+      await store.updateTrip(currentTripId, { [`notes.${editId || uid()}`]: {
+        title,
+        body: el.querySelector("#nt-body").value.trim(),
+        order: item ? item.order ?? nextOrder : nextOrder,
+      }});
+      closeModal();
+    });
+  });
 }
 
 // ---- 住宿比較卡（同一段行程有多個住宿候選時用；trip.stays 為空就只剩一行標題）----
@@ -1554,7 +1608,7 @@ function pageOutline() {
         <div class="map-hint">實線＝移動路線、虛線＝一日遊/飛行段。點 📍 開 Google Maps${showNaverMaps() ? "、點 N 開 Naver Map" : ""}。</div>
       </div>`
     : `<div class="card">${mapEmbed(view.mapQuery)}<button class="edit-btn" id="route-edit" style="margin-top:8px">🗺️ 建立行程簡圖</button></div>`;
-  return `${tripPhaseCard()}${todoCard()}${stayCard()}<div class="outline-layout">
+  return `${tripPhaseCard()}${todoCard()}${noteCard()}${stayCard()}<div class="outline-layout">
     <div>${left}</div>
     <div class="map-panel">${mapCard}</div>
   </div>`;
@@ -1589,6 +1643,10 @@ function bindOutline() {
   );
   document.querySelectorAll("[data-edittodo]").forEach((b) =>
     b.addEventListener("click", () => openTodoModal(b.dataset.edittodo))
+  );
+  document.getElementById("note-add")?.addEventListener("click", () => openNoteModal());
+  document.querySelectorAll("[data-editnote]").forEach((b) =>
+    b.addEventListener("click", (e) => { e.preventDefault(); openNoteModal(b.dataset.editnote); })
   );
   document.getElementById("stay-add")?.addEventListener("click", () => openStayModal());
   document.querySelectorAll("[data-editstay]").forEach((b) =>

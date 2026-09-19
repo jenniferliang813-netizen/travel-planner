@@ -518,3 +518,14 @@ table.sched td.s-ops { white-space: nowrap; text-align: right; }
 .rt-edit-text b { display: block; font-size: 14px; }
 .rt-edit-text small { display: block; font-size: 12px; color: var(--text-dim); }
 .rt-edit-row .mini-btn:disabled { opacity: .3; }
+
+/* ============ 提醒與備註卡 ============ */
+.note-card { margin-bottom: 12px; }
+.note-list { display: grid; gap: 6px; }
+.note-item { border: 1px solid var(--line); border-radius: 9px; background: var(--card); }
+.note-item summary { display: flex; align-items: center; gap: 6px; padding: 8px 10px; cursor: pointer; font-size: 14px; font-weight: 700; list-style: none; }
+.note-item summary::-webkit-details-marker { display: none; }
+.note-item summary::before { content: "▸"; color: var(--brand); transition: transform .15s; }
+.note-item[open] summary::before { transform: rotate(90deg); }
+.note-item summary span { flex: 1; min-width: 0; }
+.note-body { white-space: pre-wrap; font-size: 13px; line-height: 1.6; padding: 0 12px 10px 26px; color: var(--text); }
