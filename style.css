@@ -323,6 +323,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
 .status-optional { color: #5b21b6; background: #ede9fe; }
 .status-ticket-pending { color: #9f1239; background: #ffe4e6; }
 .status-conference { color: #14532d; background: #dcfce7; }
+.status-preferred { color: #115e59; background: #ccfbf1; }
+.status-recommended { color: #9a3412; background: #ffedd5; }
+.status-fixed { color: #3730a3; background: #e0e7ff; }
+.status-morning-run { color: #3f6212; background: #ecfccb; }
 @media (prefers-color-scheme: dark) {
   .status-pending { color: #fde68a; background: #78350f; }
   .status-weather-dependent { color: #a5f3fc; background: #164e63; }
@@ -331,6 +335,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
   .status-optional { color: #ddd6fe; background: #4c1d95; }
   .status-ticket-pending { color: #fecdd3; background: #881337; }
   .status-conference { color: #bbf7d0; background: #14532d; }
+  .status-preferred { color: #99f6e4; background: #134e4a; }
+  .status-recommended { color: #fed7aa; background: #7c2d12; }
+  .status-fixed { color: #c7d2fe; background: #312e81; }
+  .status-morning-run { color: #d9f99d; background: #365314; }
 }
 .spot-chip {
   display: inline-flex; align-items: center; gap: 4px;

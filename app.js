@@ -1208,6 +1208,10 @@ const STATUS_LABELS = {
   optional: "optional",
   "ticket pending": "ticket pending",
   conference: "conference",
+  preferred: "preferred",
+  recommended: "recommended",
+  fixed: "fixed",
+  "morning run": "morning run",
 };
 function statusBadge(status) {
   if (!STATUS_LABELS[status]) return "";
