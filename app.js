@@ -168,7 +168,7 @@ let lastError = "";
 const view = {
   bagPerson: null, // 行李頁看誰的勾選
   bagManage: false, // 行李頁管理模式
-  bagTab: "lug", // 行李頁內切換：lug=行李清單、shop=採購清單
+  bagTab: "lug", // 行李頁內切換：lug=行李清單、shop=採購清單、food=吃喝
   mapQuery: null, // 大綱頁目前地圖查詢字
   schedDay: null, // 每日行程頁目前選的天（dayId 或 "all"）
 };
@@ -500,6 +500,8 @@ function openNewTripModal() {
         shopping: {}, // 採購清單（共用勾選，key=uid）
         stays: {}, // 住宿比較候選（key=uid）
         notes: {}, // 提醒與備註（key=uid）
+        food: {}, // 吃喝：市場／特色餐點／酒（key=uid）
+        transit: {}, // 各地交通說明（key=uid）
         days: {},
         sched: {},
         exp: {},
@@ -541,7 +543,8 @@ function renderTrip(tab) {
 }
 
 function fabFor(tab) {
-  const map = { bag: view.bagTab === "shop" ? "新增採購項目" : "新增行李", outline: "新增一天", day: "新增行程", money: "新增一筆帳" };
+  const bagLabel = { shop: "新增採購項目", food: "新增吃喝項目" }[view.bagTab] || "新增行李";
+  const map = { bag: bagLabel, outline: "新增一天", day: "新增行程", money: "新增一筆帳" };
   if (!map[tab]) return "";
   return `<button class="fab" id="fab-add" title="${map[tab]}">＋</button>`;
 }
@@ -550,7 +553,11 @@ function bindTripPage(tab) {
   const fab = document.getElementById("fab-add");
   if (fab)
     fab.addEventListener("click", () => {
-      if (tab === "bag") view.bagTab === "shop" ? openShopItemModal() : openBagItemModal();
+      if (tab === "bag") {
+        if (view.bagTab === "shop") openShopItemModal();
+        else if (view.bagTab === "food") openFoodModal();
+        else openBagItemModal();
+      }
       else if (tab === "outline") openDayModal();
       else if (tab === "day") openSchedModal();
       else if (tab === "money") openExpenseModal();
@@ -643,12 +650,77 @@ function pageFlight() {
         <dt>記帳幣別</dt><dd>${esc(trip.currency || "NT$")}</dd>
       </dl>
       <p class="form-hint">每個人各自填自己的航班與機場交通，互不覆蓋。按自己那張卡的「編輯」。</p>
+      ${transitItems().length ? "" : `<button class="edit-btn" id="transit-add">🚌 加各地交通說明</button>`}
     </div>
-    ${cards || `<div class="empty">還沒有旅伴。按上面「編輯」加入旅伴後，再各自填航班。</div>`}`;
+    ${cards || `<div class="empty">還沒有旅伴。按上面「編輯」加入旅伴後，再各自填航班。</div>`}
+    ${transitCard()}`;
+}
+
+// ---- 各地交通（trip.transit = {<uid>: {title, card, modes, tip, order}}）----
+function transitItems() {
+  return Object.entries(trip.transit || {})
+    .map(([id, t]) => ({ id, ...t }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+function transitCard() {
+  const items = transitItems();
+  if (!items.length) return "";
+  return `<div class="card">
+    <div class="card-head"><h2>🚌 各地交通</h2><button class="edit-btn" id="transit-add">＋ 新增</button></div>
+    ${items.map((t) => `<div class="transit-item">
+      <div class="transit-title">${esc(t.title || "")}<button class="mini-btn" data-edittransit="${t.id}">✏️</button></div>
+      <dl class="kv">
+        ${t.card ? `<dt>卡</dt><dd>${esc(t.card)}</dd>` : ""}
+        ${t.modes ? `<dt>工具</dt><dd>${esc(t.modes)}</dd>` : ""}
+      </dl>
+      ${t.tip ? `<div class="transit-tip">⚠️ ${esc(t.tip)}</div>` : ""}
+    </div>`).join("")}
+  </div>`;
+}
+function openTransitModal(editId) {
+  const t = editId ? (trip.transit || {})[editId] : null;
+  const nextOrder = Math.max(0, ...transitItems().map((x) => x.order ?? 0)) + 1;
+  openModal(`
+    <h3>${t ? "編輯交通說明" : "新增交通說明"}</h3>
+    <div class="field"><label>地區 *</label><input id="tr-title" value="${esc(t ? t.title || "" : "")}" placeholder="例：🇳🇱 荷蘭" /></div>
+    <div class="field"><label>用什麼卡／怎麼付</label><input id="tr-card" value="${esc(t ? t.card || "" : "")}" placeholder="例：OVpay：信用卡感應，進出站都要刷" /></div>
+    <div class="field"><label>主要交通工具</label><input id="tr-modes" value="${esc(t ? t.modes || "" : "")}" placeholder="例：NS 火車｜電車｜公車" /></div>
+    <div class="field"><label>注意事項（一句）</label><input id="tr-tip" value="${esc(t ? t.tip || "" : "")}" placeholder="例：一人一張卡，不能兩人刷同一張" /></div>
+    <div class="btn-row">
+      ${t ? `<button class="btn danger" id="tr-del">刪除</button>` : ""}
+      <button class="btn secondary" id="tr-cancel">取消</button>
+      <button class="btn" id="tr-save">儲存</button>
+    </div>
+  `, (el) => {
+    el.querySelector("#tr-cancel").addEventListener("click", closeModal);
+    el.querySelector("#tr-del")?.addEventListener("click", async () => {
+      if (!confirm(`刪除「${t.title}」？`)) return;
+      await store.updateTrip(currentTripId, { [`transit.${editId}`]: DELETE });
+      closeModal();
+    });
+    el.querySelector("#tr-save").addEventListener("click", async () => {
+      const title = el.querySelector("#tr-title").value.trim();
+      if (!title) return alert("請填地區");
+      await store.updateTrip(currentTripId, {
+        [`transit.${editId || uid()}`]: {
+          title,
+          card: el.querySelector("#tr-card").value.trim(),
+          modes: el.querySelector("#tr-modes").value.trim(),
+          tip: el.querySelector("#tr-tip").value.trim(),
+          order: t ? t.order ?? 0 : nextOrder,
+        },
+      });
+      closeModal();
+    });
+  });
 }
 
 function bindFlight() {
   document.getElementById("edit-info").addEventListener("click", openTripInfoModal);
+  document.getElementById("transit-add")?.addEventListener("click", () => openTransitModal());
+  document.querySelectorAll("[data-edittransit]").forEach((b) =>
+    b.addEventListener("click", () => openTransitModal(b.dataset.edittransit))
+  );
   document.querySelectorAll("[data-pax]").forEach((b) =>
     b.addEventListener("click", () => openPaxModal(b.dataset.pax))
   );
@@ -828,18 +900,37 @@ function shopItems() {
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
-// 行李頁頂部的「行李｜採購」切換鈕
+// 行李頁頂部的「行李｜採購｜吃喝」切換鈕
 function bagTabSwitch() {
-  return `<div class="chips" style="margin-bottom:10px">
-    <button class="chip ${view.bagTab !== "shop" ? "active" : ""}" data-bagtab="lug">🧳 行李清單</button>
-    <button class="chip ${view.bagTab === "shop" ? "active" : ""}" data-bagtab="shop">🛒 採購清單</button>
-  </div>`;
+  const tabs = [["lug", "🧳 行李清單"], ["shop", "🛒 採購清單"], ["food", "🍴 吃喝"]];
+  return `<div class="chips" style="margin-bottom:10px">${tabs
+    .map(([k, label]) => `<button class="chip ${view.bagTab === k ? "active" : ""}" data-bagtab="${k}">${label}</button>`)
+    .join("")}</div>`;
+}
+
+// 小圖：img 是 repo 內的相對路徑（例 img/food/coddle.jpg），點了開大圖；沒圖用 emoji 佔位
+function thumb(img, fallback) {
+  return img
+    ? `<a class="thumb" href="${esc(img)}" target="_blank" rel="noopener"><img src="${esc(img)}" alt="" loading="lazy" /></a>`
+    : `<span class="thumb thumb-empty">${fallback}</span>`;
+}
+function placeLink(place) {
+  return place
+    ? `<a class="shop-link" href="${gmapUrl(place)}" target="_blank" rel="noopener" title="${esc(place)}">📍 地圖</a>`
+    : "";
+}
+// 帶回台灣的額度（trip.carry = {<key>: {label, max}}；採購項目用 carry:<key> 標記）
+function carryKinds() {
+  return Object.entries(trip.carry || {}).map(([key, c]) => ({ key, ...c }));
 }
 
 function shopRow(it) {
+  const carry = (trip.carry || {})[it.carry];
   return `<div class="lug-item ${it.done ? "checked" : ""}">
     <input type="checkbox" data-shopid="${it.id}" ${it.done ? "checked" : ""} />
-    <div class="l-name">${esc(it.name)}${it.note ? `<div class="l-note">${esc(it.note)}</div>` : ""}</div>
+    ${it.img ? thumb(it.img, "") : ""}
+    <div class="l-name">${esc(it.name)}${carry ? ` <span class="carry-tag">${esc(carry.label)}</span>` : ""}${it.note ? `<div class="l-note">${esc(it.note)}</div>` : ""}</div>
+    ${placeLink(it.place)}
     ${it.link ? `<a class="shop-link" href="${esc(it.link)}" target="_blank" rel="noopener">🔗 參考</a>` : ""}
     ${
       view.bagManage
@@ -889,12 +980,162 @@ function pageShop() {
         <div class="progress-bar"><div style="width:${pct}%"></div></div>
         <div class="progress-text">買到 ${done}/${items.length}（${pct}%）</div>
       </div>
+      ${carryKinds().length ? `<div class="carry-quota">🧳 帶回台灣：${carryKinds()
+        .map((c) => {
+          const n = items.filter((i) => i.carry === c.key && i.done).length;
+          return `<span class="${n > c.max ? "over" : ""}">${esc(c.label)} ${n}/${c.max}</span>`;
+        })
+        .join("・")}</div>` : ""}
     </div>
     ${items.length ? groups : `<div class="empty">還沒有採購項目，按「＋」新增（例：辣炒年糕泡麵 媽要兩包）</div>`}`;
 }
 
+// ---- 吃喝（trip.food = {<uid>: {city, kind, name, desc, img, place, dayId, done, order}}）----
+// city 慣例同採購分類「城市｜日期」；dayId 有填的會在行程大綱那天列出關鍵字
+const FOOD_KINDS = [
+  ["market", "🥬", "MARKET"],
+  ["food", "🍴", "LOCAL FOOD"],
+  ["drink", "🍺", "LOCAL DRINK"],
+];
+const FOOD_ICON = Object.fromEntries(FOOD_KINDS.map(([k, icon]) => [k, icon]));
+
+function foodItems() {
+  return Object.entries(trip.food || {})
+    .map(([id, it]) => ({ id, ...it }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+function foodRow(it) {
+  return `<div class="lug-item ${it.done ? "checked" : ""}">
+    <input type="checkbox" data-foodid="${it.id}" ${it.done ? "checked" : ""} />
+    ${thumb(it.img, FOOD_ICON[it.kind] || "🍴")}
+    <div class="l-name">${esc(it.name)}${it.desc ? `<div class="l-note">${esc(it.desc)}</div>` : ""}</div>
+    ${placeLink(it.place)}
+    ${
+      view.bagManage
+        ? `<button class="mini-btn" data-foodedit="${it.id}">✏️</button><button class="mini-btn danger" data-fooddel="${it.id}">🗑️</button>`
+        : ""
+    }
+  </div>`;
+}
+
+function pageFood() {
+  const items = foodItems();
+  const done = items.filter((it) => it.done).length;
+  const cities = [];
+  items.forEach((it) => {
+    const c = it.city || "其他";
+    if (!cities.includes(c)) cities.push(c);
+  });
+  const groups = cities
+    .map((city) => {
+      const list = items.filter((it) => (it.city || "其他") === city);
+      const parts = city.split("｜");
+      const sub = parts.slice(1).join("｜");
+      const sections = FOOD_KINDS.map(([k, icon, label]) => {
+        const rows = list.filter((it) => it.kind === k);
+        return rows.length ? `<div class="food-kind">${icon} ${label}</div>${rows.map(foodRow).join("")}` : "";
+      }).join("");
+      return `<div class="card">
+        <div class="card-head">
+          <h2>${esc(parts[0])}${sub ? `<div class="shop-cat-sub">${esc(sub)}</div>` : ""}</h2>
+          <span class="sub">${list.filter((i) => i.done).length}/${list.length}</span>
+        </div>
+        ${sections}
+      </div>`;
+    })
+    .join("");
+  return `
+    ${bagTabSwitch()}
+    <div class="card">
+      <div class="card-head"><h2>吃喝清單</h2>
+        <button class="edit-btn" id="bag-manage">${view.bagManage ? "完成管理" : "管理清單"}</button>
+      </div>
+      <div class="progress-text">吃過／喝過 ${done}/${items.length}　・勾選＝已體驗，點小圖看大圖，📍 開 Google Maps</div>
+    </div>
+    ${items.length ? groups : `<div class="empty">還沒有吃喝項目，按「＋」新增（市場、特色菜、當地酒）</div>`}`;
+}
+
+// 行程大綱每天的吃喝／採購關鍵字（有 place 的名字可點開 Google Maps）
+function dayFoodLine(d) {
+  const eats = foodItems().filter((f) => f.dayId === d.id);
+  const buys = shopItems().filter((s) => s.dayId === d.id);
+  if (!eats.length && !buys.length) return "";
+  const link = (it) =>
+    it.place
+      ? `<a href="${gmapUrl(it.place)}" target="_blank" rel="noopener" title="${esc(it.place)}">${esc(it.short || it.name)}📍</a>`
+      : esc(it.short || it.name);
+  const parts = FOOD_KINDS.map(([k, icon]) => {
+    const l = eats.filter((f) => f.kind === k);
+    return l.length ? `${icon} ${l.map(link).join("・")}` : "";
+  }).filter(Boolean);
+  if (buys.length) parts.push(`🛍 ${buys.map(link).join("・")}`);
+  return `<div class="d-food">${parts.join(`<span class="d-food-sep">｜</span>`)}</div>`;
+}
+
+// 某個 map（food／shopping）的分類選單：既有值＋新增
+function catSelect(id, values, current, newLabel) {
+  return `<select id="${id}">${values.map((c) => `<option ${current === c ? "selected" : ""}>${esc(c)}</option>`).join("")}
+    <option value="__new__">${newLabel}</option></select>`;
+}
+function daySelect(id, current) {
+  return `<select id="${id}"><option value="">（不列在行程大綱）</option>${dayList()
+    .map((d) => `<option value="${d.id}" ${current === d.id ? "selected" : ""}>Day ${d.n} ${esc(d.date || "")} ${esc(d.title || "")}</option>`)
+    .join("")}</select>`;
+}
+
+function openFoodModal(editId) {
+  const it = editId ? (trip.food || {})[editId] : null;
+  const cities = [...new Set(foodItems().map((i) => i.city || "其他"))];
+  openModal(`
+    <h3>${it ? "編輯吃喝項目" : "新增吃喝項目"}</h3>
+    <div class="field"><label>名稱 *</label><input id="fd-name" value="${esc(it ? it.name : "")}" placeholder="例：Dublin Coddle" /></div>
+    <div class="field-row">
+      <div class="field"><label>類型</label><select id="fd-kind">${FOOD_KINDS.map(([k, icon, label]) => `<option value="${k}" ${it && it.kind === k ? "selected" : ""}>${icon} ${label}</option>`).join("")}</select></div>
+      <div class="field"><label>城市</label>${catSelect("fd-city", cities, it && it.city, "＋ 新城市…")}</div>
+    </div>
+    <div class="field" id="fd-newcity-wrap" style="display:${cities.length ? "none" : ""}"><label>新城市（建議寫「城市｜日期」）</label><input id="fd-newcity" placeholder="例：🇮🇪 Dublin｜9/26–10/1" /></div>
+    <div class="field"><label>一句話說明</label><input id="fd-desc" value="${esc(it ? it.desc || "" : "")}" placeholder="例：香腸培根馬鈴薯燉菜｜The Brazen Head" /></div>
+    <div class="field"><label>Google Maps 地點（店名＋地址）</label><input id="fd-place" value="${esc(it ? it.place || "" : "")}" placeholder="例：The Brazen Head, 20 Lower Bridge St, Dublin 8" /></div>
+    <div class="field"><label>小圖路徑</label><input id="fd-img" value="${esc(it ? it.img || "" : "")}" placeholder="例：img/food/coddle.jpg（沒有就留空）" /></div>
+    <div class="field"><label>列在哪天的行程大綱</label>${daySelect("fd-day", it && it.dayId)}</div>
+    <div class="btn-row">
+      <button class="btn secondary" id="fd-cancel">取消</button>
+      <button class="btn" id="fd-save">儲存</button>
+    </div>
+  `, (el) => {
+    el.querySelector("#fd-city").addEventListener("change", (e) => {
+      el.querySelector("#fd-newcity-wrap").style.display = e.target.value === "__new__" ? "" : "none";
+    });
+    el.querySelector("#fd-cancel").addEventListener("click", closeModal);
+    el.querySelector("#fd-save").addEventListener("click", async () => {
+      const name = el.querySelector("#fd-name").value.trim();
+      if (!name) return alert("請填名稱");
+      let city = el.querySelector("#fd-city").value;
+      if (city === "__new__" || !cities.length) city = el.querySelector("#fd-newcity").value.trim() || "其他";
+      const maxOrder = Math.max(0, ...foodItems().map((i) => i.order ?? 0));
+      await store.updateTrip(currentTripId, {
+        [`food.${editId || uid()}`]: {
+          ...(it || {}),
+          city,
+          kind: el.querySelector("#fd-kind").value,
+          name,
+          desc: el.querySelector("#fd-desc").value.trim(),
+          place: el.querySelector("#fd-place").value.trim(),
+          img: el.querySelector("#fd-img").value.trim(),
+          dayId: el.querySelector("#fd-day").value,
+          order: it ? it.order ?? 0 : maxOrder + 1,
+          done: it ? !!it.done : false,
+        },
+      });
+      closeModal();
+    });
+  });
+}
+
 function pageBag() {
   if (view.bagTab === "shop") return pageShop();
+  if (view.bagTab === "food") return pageFood();
   const members = trip.members || [];
   const me = getUser();
   if (!view.bagPerson || !members.includes(view.bagPerson))
@@ -982,6 +1223,25 @@ function bindBag() {
     );
     return; // 下面是行李模式的綁定
   }
+  // ---- 吃喝模式 ----
+  if (view.bagTab === "food") {
+    document.querySelectorAll("[data-foodid]").forEach((cb) =>
+      cb.addEventListener("change", async () => {
+        await store.updateTrip(currentTripId, { [`food.${cb.dataset.foodid}.done`]: cb.checked });
+      })
+    );
+    document.querySelectorAll("[data-foodedit]").forEach((b) =>
+      b.addEventListener("click", () => openFoodModal(b.dataset.foodedit))
+    );
+    document.querySelectorAll("[data-fooddel]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        const it = (trip.food || {})[b.dataset.fooddel];
+        if (!it || !confirm(`刪除「${it.name}」？`)) return;
+        await store.updateTrip(currentTripId, { [`food.${b.dataset.fooddel}`]: DELETE });
+      })
+    );
+    return;
+  }
   document.querySelectorAll(".lug-item input[type=checkbox]").forEach((cb) =>
     cb.addEventListener("change", async () => {
       const it = (trip.luggage || {})[cb.dataset.id];
@@ -1062,6 +1322,12 @@ function openShopItemModal(editId) {
     <div class="field" id="sp-newcat-wrap" style="display:none"><label>新店家（建議寫「店名｜第幾天｜地址」）</label><input id="sp-newcat" placeholder="例：🛒 E-Mart 海雲台店｜Day2 15:15｜좌동순환로 511" /></div>
     <div class="field"><label>備註</label><input id="sp-note" value="${esc(it ? it.note || "" : "")}" placeholder="例：媽要兩包、樂天超市有" /></div>
     <div class="field"><label>參考連結</label><input id="sp-link" value="${esc(it ? it.link || "" : "")}" placeholder="貼商品頁或 IG 貼文網址，清單上會出現 🔗" /></div>
+    <div class="field"><label>Google Maps 地點（店名＋地址，選填）</label><input id="sp-place" value="${esc(it ? it.place || "" : "")}" placeholder="例：Tierenteyn-Verlent, Groentenmarkt 3, Gent" /></div>
+    <div class="field"><label>小圖路徑（選填）</label><input id="sp-img" value="${esc(it ? it.img || "" : "")}" placeholder="例：img/food/zaanse.jpg" /></div>
+    ${carryKinds().length ? `<div class="field"><label>帶回台灣額度</label><select id="sp-carry"><option value="">（不計額度）</option>${carryKinds()
+      .map((c) => `<option value="${c.key}" ${it && it.carry === c.key ? "selected" : ""}>${esc(c.label)}（上限 ${c.max}）</option>`)
+      .join("")}</select></div>` : ""}
+    <div class="field"><label>列在哪天的行程大綱</label>${daySelect("sp-day", it && it.dayId)}</div>
     <div class="btn-row">
       <button class="btn secondary" id="sp-cancel">取消</button>
       <button class="btn" id="sp-save">儲存</button>
@@ -1080,6 +1346,11 @@ function openShopItemModal(editId) {
       const maxOrder = Math.max(0, ...shopItems().map((i) => i.order ?? 0));
       await store.updateTrip(currentTripId, {
         [`shopping.${id}`]: {
+          ...(it || {}),
+          place: el.querySelector("#sp-place").value.trim(),
+          img: el.querySelector("#sp-img").value.trim(),
+          ...(el.querySelector("#sp-carry") ? { carry: el.querySelector("#sp-carry").value } : {}),
+          dayId: el.querySelector("#sp-day").value,
           cat,
           name,
           note: el.querySelector("#sp-note").value.trim(),
@@ -1587,6 +1858,7 @@ function pageOutline() {
               .map((name) => `<span>👤 ${esc(name)}</span>`)
               .join("")}</div>` : ""}
             ${d.plan ? `<div class="d-plan">${esc(d.plan)}</div>` : ""}
+            ${dayFoodLine(d)}
             ${d.transport ? `<div class="d-row"><span class="d-ico">🚃</span><span>${esc(d.transport)}</span></div>` : ""}
             ${d.lodging ? `<div class="d-row"><span class="d-ico">🏨</span><span>${esc(d.lodging)}</span>${
               d.lodgingPlace ? `<a class="lodging-map" href="${gmapUrl(d.lodgingPlace)}" target="_blank" rel="noopener" title="在 Google Maps 開啟：${esc(d.lodgingPlace)}">📍 Google Maps</a>` : ""}</div>` : ""}

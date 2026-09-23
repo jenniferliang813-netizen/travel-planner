@@ -20,6 +20,8 @@
 - 資料：Firebase Firestore（collection `trips`，一趟旅行＝一份 document）＋匿名登入。`firebase-config.js` 的 apiKey 設計上公開。
 - 地圖：Leaflet（CDN）＋CARTO 圖磚；地點連結開 Google Maps／Naver Map。都不需金鑰，**不要改成需要金鑰的官方 Maps API**。
 - 天氣：打開「每日行程」時向 Open-Meteo 即時抓（免金鑰），依座標選當地氣象局模型（日本 JMA、韓國 KMA、愛爾蘭/荷蘭/比利時 KNMI HARMONIE）。地點＝當天手動指定的 `day.wx`，否則用 `route` 裡 `d` 含這天（「Day 2-6」格式）的點。
+- 吃喝／採購小圖：行李頁有「🍴 吃喝」分頁（`trip.food`：市場／特色菜／當地酒，依城市分組）；採購清單可附小圖、Google Maps 地點與「帶回台灣額度」（`trip.carry`）。有填 `dayId` 的項目會在行程大綱那天列出關鍵字。小圖放 `img/food/`（只用自由授權圖，來源寫進 `img/food/CREDITS.md`，不要熱連外部圖片）。
+- 各地交通：航班交通頁的「🚌 各地交通」卡（`trip.transit`）。
 - `worker/`：Cloudflare Worker 唯讀 API（秘密在 Cloudflare secrets，不在 repo）。
 
 ## 改程式必守的規則
