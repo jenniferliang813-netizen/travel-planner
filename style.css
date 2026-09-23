@@ -18,6 +18,7 @@
 body[data-season="autumn"] { /* 秋：淡楓葉 */
   --bg: #fbf6ef; --card: #fffdf9; --text: #4a3426; --text-dim: #9c8572;
   --line: #f1e4d4; --brand: #c26d3c; --brand-soft: #fcede0; --accent: #d49a45;
+  --topbar-bg: #f4cf8f; --topbar-text: #5a3a22; --topbar-chip: rgba(255,255,255,0.5); /* 頂端：淡金黃楓葉 */
 }
 body[data-season="spring"] { /* 春：櫻花 */
   --bg: #f7f0f3; --card: #fffafc; --text: #3d2833; --text-dim: #96707f;
@@ -67,18 +68,18 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
 /* ============ 頁面骨架 ============ */
 .topbar {
   position: sticky; top: 0; z-index: 30;
-  background: var(--brand); color: #fff;
+  background: var(--topbar-bg, var(--brand)); color: var(--topbar-text, #fff);
   padding: 10px 14px;
   display: flex; align-items: center; gap: 10px;
   box-shadow: var(--shadow);
 }
 .topbar h1 { font-size: 17px; font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.topbar .icon-btn { font-size: 20px; padding: 4px 8px; border-radius: 8px; color: #fff; }
+.topbar .icon-btn { font-size: 20px; padding: 4px 8px; border-radius: 8px; color: var(--topbar-text, #fff); }
 .topbar .icon-btn:active { background: rgba(255,255,255,0.2); }
 .userchip {
-  background: rgba(255,255,255,0.22);
+  background: var(--topbar-chip, rgba(255,255,255,0.22));
   border-radius: 99px; padding: 3px 12px;
-  font-size: 13px; color: #fff; white-space: nowrap;
+  font-size: 13px; color: var(--topbar-text, #fff); white-space: nowrap;
 }
 
 .tabs {
