@@ -1,5 +1,6 @@
 /* ============ 基礎 ============ */
 :root {
+  color-scheme: light; /* 只用淺色：手機開深色模式也不會變深 */
   --bg: #f2f6f8;
   --card: #ffffff;
   --text: #1e293b;
@@ -13,22 +14,10 @@
   --radius: 14px;
   --shadow: 0 1px 3px rgba(15, 40, 60, 0.08), 0 4px 14px rgba(15, 40, 60, 0.05);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f172a;
-    --card: #1e293b;
-    --text: #e2e8f0;
-    --text-dim: #94a3b8;
-    --line: #334155;
-    --brand: #22b8d4;
-    --brand-soft: #164e5f;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-  }
-}
 /* ===== 季節主題（依旅行「出發日」月份自動套用；夏季＝預設青色）===== */
-body[data-season="autumn"] { /* 秋：楓葉 */
-  --bg: #f6efe4; --card: #fffaf2; --text: #40291a; --text-dim: #94765d;
-  --line: #ecdcc6; --brand: #b3541e; --brand-soft: #f8e3cd; --accent: #c98116;
+body[data-season="autumn"] { /* 秋：淡楓葉 */
+  --bg: #fbf6ef; --card: #fffdf9; --text: #4a3426; --text-dim: #9c8572;
+  --line: #f1e4d4; --brand: #c26d3c; --brand-soft: #fcede0; --accent: #d49a45;
 }
 body[data-season="spring"] { /* 春：櫻花 */
   --bg: #f7f0f3; --card: #fffafc; --text: #3d2833; --text-dim: #96707f;
@@ -44,38 +33,12 @@ body[data-season="okinawa"] {
   --line: #e9ded0; --brand: #2b8b9c; --brand-soft: #ddeff1; --accent: #e8785a;
   --shadow: 0 1px 3px rgba(60, 70, 70, 0.07), 0 4px 14px rgba(60, 70, 70, 0.05);
 }
-@media (prefers-color-scheme: dark) {
-  body[data-season="autumn"] {
-    --bg: #241a10; --card: #342615; --text: #f2e5d3; --text-dim: #bfa084;
-    --line: #4c3a22; --brand: #e08a3c; --brand-soft: #553516; --accent: #e5a23c;
-  }
-  body[data-season="spring"] {
-    --bg: #251a20; --card: #36262e; --text: #f1e2ea; --text-dim: #bb93a5;
-    --line: #503846; --brand: #e77fb0; --brand-soft: #54293d; --accent: #7fbf72;
-  }
-  body[data-season="winter"] {
-    --bg: #141a24; --card: #1f2836; --text: #e2e8f0; --text-dim: #93a5bd;
-    --line: #31405a; --brand: #7fa3e8; --brand-soft: #243a5e; --accent: #9db8e8;
-  }
-  body[data-season="okinawa"] {
-    --bg: #15232a; --card: #1f2f37; --text: #ece3d5; --text-dim: #9aacb2;
-    --line: #33454d; --brand: #4fc3d4; --brand-soft: #1c4650; --accent: #f08a6c;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-  }
-}
 /* ===== 首頁「總表」文青主題（莫蘭迪奶茶），只套用在 body[data-home] ===== */
 :root { --font-title: "Noto Serif TC", "Noto Serif CJK TC", Georgia, "Songti TC", serif; }
 body[data-home] {
   --bg: #e2e6e8; --card: #f4f6f7; --text: #3f4a52; --text-dim: #8b98a1;
   --line: #d2dade; --brand: #7f95a3; --brand-soft: #e4ecf0; --accent: #b3a08c;
   --shadow: 0 1px 2px rgba(55, 75, 90, 0.06), 0 6px 18px rgba(55, 75, 90, 0.08);
-}
-@media (prefers-color-scheme: dark) {
-  body[data-home] {
-    --bg: #22282c; --card: #2c343a; --text: #dde5e9; --text-dim: #96a5ae;
-    --line: #3c4850; --brand: #93aabb; --brand-soft: #34424c; --accent: #bfab92;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  }
 }
 /* 首頁標題與旅行名稱用文青宋體 */
 body[data-home] .topbar h1 { font-family: var(--font-title); font-weight: 700; letter-spacing: .03em; }
@@ -186,7 +149,6 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
   font-size: 13px; margin-bottom: 12px;
   display: flex; gap: 8px; align-items: center;
 }
-@media (prefers-color-scheme: dark) { .notice { background: #4a3a10; color: #fcd34d; } }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
   padding: 6px 14px; border-radius: 99px;
@@ -327,19 +289,6 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
 .status-recommended { color: #9a3412; background: #ffedd5; }
 .status-fixed { color: #3730a3; background: #e0e7ff; }
 .status-morning-run { color: #3f6212; background: #ecfccb; }
-@media (prefers-color-scheme: dark) {
-  .status-pending { color: #fde68a; background: #78350f; }
-  .status-weather-dependent { color: #a5f3fc; background: #164e63; }
-  .status-weather-backup { color: #bfdbfe; background: #1e3a8a; }
-  .status-backup { color: #d4d4d8; background: #3f3f46; }
-  .status-optional { color: #ddd6fe; background: #4c1d95; }
-  .status-ticket-pending { color: #fecdd3; background: #881337; }
-  .status-conference { color: #bbf7d0; background: #14532d; }
-  .status-preferred { color: #99f6e4; background: #134e4a; }
-  .status-recommended { color: #fed7aa; background: #7c2d12; }
-  .status-fixed { color: #c7d2fe; background: #312e81; }
-  .status-morning-run { color: #d9f99d; background: #365314; }
-}
 .spot-chip {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 12px; margin: 3px 4px 0 0;
@@ -480,13 +429,6 @@ table.sched td.s-ops { white-space: nowrap; text-align: right; }
 .stay-b-booked { color: #065f46; background: #d1fae5; }
 .stay-b-picked { color: #065f46; background: #a7f3d0; }
 .stay-b-dropped { color: #57534e; background: #e7e5e4; }
-@media (prefers-color-scheme: dark) {
-  .stay-b-holding { color: #fde68a; background: #78350f; }
-  .stay-b-compare { color: #bfdbfe; background: #1e3a8a; }
-  .stay-b-booked { color: #a7f3d0; background: #064e3b; }
-  .stay-b-picked { color: #d1fae5; background: #047857; }
-  .stay-b-dropped { color: #d6d3d1; background: #44403c; }
-}
 .stay-area { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
 .stay-line {
   display: flex; gap: 6px; margin-top: 5px;

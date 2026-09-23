@@ -44,3 +44,6 @@
 | stroopwafels.jpg | Open Food Facts contributors | CC BY-SA 3.0 | https://world.openfoodfacts.org/product/8718907222389 |
 | nasibami.jpg | Open Food Facts contributors | CC BY-SA 3.0 | https://world.openfoodfacts.org/product/87351682 |
 | roomer.jpg | Open Food Facts contributors | CC BY-SA 3.0 | https://world.openfoodfacts.org/product/5425032490011 |
+| wool.jpg | Lisa Dusseault from USA | CC BY 2.0 | https://commons.wikimedia.org/wiki/File:Aran_cardigan.jpg |
+| penneys.jpg | Gatepainter | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Penney%27s,_Mary_Street,_Dublin.jpg |
+| carrolls.jpg | Robin Pollard | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:Carroll%27s_Irish_Gift_Shop_-_panoramio.jpg |
