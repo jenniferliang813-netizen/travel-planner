@@ -17,9 +17,7 @@
 /* ===== 季節主題（依旅行「出發日」月份自動套用；夏季＝預設青色）===== */
 body[data-season="autumn"] { /* 秋：淡楓葉 */
   --bg: #fbf6ef; --card: #fffdf9; --text: #4a3426; --text-dim: #9c8572;
-  --line: #f1e4d4; --brand: #c26d3c; --brand-soft: #fcede0; --accent: #d49a45;
-  --topbar-bg: #f4cf8f; --topbar-text: #5a3a22; --topbar-chip: rgba(255,255,255,0.5); /* 頂端：淡金黃楓葉 */
-}
+  --line: #f1e4d4; --brand: #c26d3c; --brand-soft: #fcede0; --accent: #d49a45;}
 body[data-season="spring"] { /* 春：櫻花 */
   --bg: #f7f0f3; --card: #fffafc; --text: #3d2833; --text-dim: #96707f;
   --line: #f0dbe4; --brand: #c2477d; --brand-soft: #fbe3ee; --accent: #59a14f;
