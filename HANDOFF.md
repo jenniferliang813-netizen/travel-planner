@@ -32,7 +32,7 @@
 4. 刪欄位用 `DELETE` 哨兵，值是 `" __DELETE__"`，**開頭那個空格是刻意的，別「修正」它**。
 5. 寫入失敗靠全域 `unhandledrejection` alert 提示，新增寫入時不用各自包 try/catch。
 6. 舊旅行可能缺某些欄位（`stays`、`shopping`、`phases`、`route`…），渲染時都要能處理「沒有這個欄位」。
-7. 新功能的樣式要支援深色模式（`@media (prefers-color-scheme: dark)`）和 375px 手機寬度不橫向溢出。
+7. **只有淺色模式**（使用者 2026-09-23 決定拿掉深色；`:root` 設 `color-scheme: light`），**不要再加 `prefers-color-scheme: dark`**。新樣式要在 375px 手機寬度不橫向溢出。
 
 ## 在雲端／手機 session 的限制
 
