@@ -995,6 +995,7 @@ function pageShop() {
 const FOOD_KINDS = [
   ["market", "🥬", "MARKET"],
   ["food", "🍴", "LOCAL FOOD"],
+  ["cafe", "☕", "CAFE・甜點"],
   ["drink", "🍺", "LOCAL DRINK"],
 ];
 const FOOD_ICON = Object.fromEntries(FOOD_KINDS.map(([k, icon]) => [k, icon]));
@@ -1404,9 +1405,10 @@ function initRouteMap() {
       const brand = css.getPropertyValue("--brand").trim() || "#0e7490";
       const accent = css.getPropertyValue("--accent").trim() || "#f59e0b";
       const map = L.map(el, { scrollWheelZoom: false });
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        attribution: "&copy; OpenStreetMap &copy; CARTO",
-        maxZoom: 18,
+      // CARTO basemaps now need an API key (tiles render an "API KEY REQUIRED" watermark) → use standard OSM tiles
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
       }).addTo(map);
       let lastBase = null;
       // 線段中點放交通時間小標籤（route 項目的 t 欄位＝「從上一個點過來」的時間）
