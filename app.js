@@ -1890,10 +1890,11 @@ function pageOutline() {
         <div class="map-hint">實線＝移動路線、虛線＝一日遊/飛行段。點 📍 開 Google Maps${showNaverMaps() ? "、點 N 開 Naver Map" : ""}。</div>
       </div>`
     : `<div class="card">${mapEmbed(view.mapQuery)}<button class="edit-btn" id="route-edit" style="margin-top:8px">🗺️ 建立行程簡圖</button></div>`;
-  return `${tripPhaseCard()}${todoCard()}${noteCard()}${stayCard()}<div class="outline-layout">
+  // order: phases → stays → day outline + map → todos → notes
+  return `${tripPhaseCard()}${stayCard()}<div class="outline-layout">
     <div>${left}</div>
     <div class="map-panel">${mapCard}</div>
-  </div>`;
+  </div>${todoCard()}${noteCard()}`;
 }
 
 function bindOutline() {

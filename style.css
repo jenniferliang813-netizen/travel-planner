@@ -261,6 +261,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
   .lodging-map { width: 100%; margin-left: 22px; }
 }
 .todo-card { margin-bottom: 12px; }
+.outline-layout + .todo-card { margin-top: 12px; }
 .todo-list { display: grid; gap: 7px; }
 .todo-item {
   display: flex; align-items: center; gap: 9px;
