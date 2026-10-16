@@ -1571,10 +1571,13 @@ function openNoteModal(editId) {
 const STAY_STATUS = {
   holding: { label: "保留中", cls: "holding" },
   compare: { label: "比較中", cls: "compare" },
+  primary: { label: "主方案", cls: "primary" },
   booked: { label: "已預訂", cls: "booked" },
   picked: { label: "已選定", cls: "picked" },
   dropped: { label: "已放棄", cls: "dropped" },
+  cancel: { label: "待取消", cls: "cancel" },
 };
+const STAY_FOLD = new Set(["cancel", "dropped"]); // groups made only of these start collapsed
 
 function stayItems() {
   return Object.entries(trip.stays || {})
@@ -1614,10 +1617,13 @@ function stayCard() {
       <h2>🏨 住宿比較</h2>
       <button class="edit-btn" id="stay-add">＋ 新增</button>
     </div>
-    ${groups.map((g) => `<div class="stay-group">
-      <div class="stay-group-title">${esc(g)}</div>
-      <div class="stay-grid">${items.filter((s) => (s.group || "住宿候選") === g).map(stayBlock).join("")}</div>
-    </div>`).join("")}
+    ${groups.map((g) => {
+      const list = items.filter((s) => (s.group || "住宿候選") === g);
+      const grid = `<div class="stay-grid">${list.map(stayBlock).join("")}</div>`;
+      return list.every((s) => STAY_FOLD.has(s.status))
+        ? `<details class="stay-group stay-fold"><summary class="stay-group-title">${esc(g)}（${list.length} 筆，點開看）</summary>${grid}</details>`
+        : `<div class="stay-group"><div class="stay-group-title">${esc(g)}</div>${grid}</div>`;
+    }).join("")}
   </div>`;
 }
 
@@ -2186,7 +2192,27 @@ function fillWx(d) {
 function schedRows() {
   return Object.entries(trip.sched || {})
     .map(([id, r]) => ({ id, ...r }))
-    .sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
+    // same/empty time → fall back to id so rows keep a stable order (Firestore map order isn't guaranteed)
+    .sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99") || a.id.localeCompare(b.id));
+}
+
+// One schedule table; weather-backup rows are rendered separately inside a <details> fold
+function schedTable(list) {
+  return `<div class="table-wrap"><table class="sched">
+    <thead><tr><th>時間</th><th>行程</th><th>停留</th><th>交通</th><th>備註</th><th></th></tr></thead>
+    <tbody>${list.map((r) => `<tr>
+                    <td class="s-time">${esc(r.time || "—")}</td>
+                    <td class="s-act">${esc(r.act || "")}${statusBadge(r.status)}${
+                      r.place
+                        ? ` <a class="s-map" href="${gmapUrl(r.place)}" target="_blank" rel="noopener" title="在 Google Maps 開啟：${esc(r.place)}">📍</a>${showNaverMaps() ? `<a class="s-map s-naver" href="${nmapUrl(r.place)}" target="_blank" rel="noopener" title="在 Naver Map 開啟：${esc(r.place)}">N</a>` : ""}`
+                        : ""
+                    }</td>
+                    <td class="s-trans">${esc(r.stay || "")}</td>
+                    <td class="s-trans">${esc(r.trans || "")}</td>
+                    <td class="s-note">${esc(r.note || "")}</td>
+                    <td class="s-ops"><button class="mini-btn" data-editsched="${r.id}">✏️</button><button class="mini-btn danger" data-delsched="${r.id}">🗑️</button></td>
+                  </tr>`).join("")}</tbody>
+  </table></div>`;
 }
 
 function pageDay() {
@@ -2205,6 +2231,8 @@ function pageDay() {
   const shown =
     current === "orphan" ? rows.filter((r) => !dayIds.has(r.dayId)) : rows.filter((r) => r.dayId === current);
   const curDay = days.find((d) => d.id === current);
+  const mainRows = shown.filter((r) => r.status !== "weather backup");
+  const backupRows = shown.filter((r) => r.status === "weather backup");
 
   return `
     <div class="chips" style="margin-bottom:12px">
@@ -2219,28 +2247,14 @@ function pageDay() {
       ${wxCard(curDay)}
       ${curDay && curDay.lodging ? `<div class="d-row" style="margin-bottom:8px"><span class="d-ico">🏨</span><span>${esc(curDay.lodging)}</span></div>` : ""}
       ${
-        shown.length
-          ? `<div class="table-wrap"><table class="sched">
-              <thead><tr><th>時間</th><th>行程</th><th>停留</th><th>交通</th><th>備註</th><th></th></tr></thead>
-              <tbody>${shown
-                .map(
-                  (r) => `<tr>
-                    <td class="s-time">${esc(r.time || "—")}</td>
-                    <td class="s-act">${esc(r.act || "")}${statusBadge(r.status)}${
-                      r.place
-                        ? ` <a class="s-map" href="${gmapUrl(r.place)}" target="_blank" rel="noopener" title="在 Google Maps 開啟：${esc(r.place)}">📍</a>${showNaverMaps() ? `<a class="s-map s-naver" href="${nmapUrl(r.place)}" target="_blank" rel="noopener" title="在 Naver Map 開啟：${esc(r.place)}">N</a>` : ""}`
-                        : ""
-                    }</td>
-                    <td class="s-trans">${esc(r.stay || "")}</td>
-                    <td class="s-trans">${esc(r.trans || "")}</td>
-                    <td class="s-note">${esc(r.note || "")}</td>
-                    <td class="s-ops"><button class="mini-btn" data-editsched="${r.id}">✏️</button><button class="mini-btn danger" data-delsched="${r.id}">🗑️</button></td>
-                  </tr>`
-                )
-                .join("")}</tbody>
-            </table></div>`
-          : `<div class="empty">這天還沒有細部行程，按「＋」新增</div>`
+        mainRows.length
+          ? schedTable(mainRows)
+          : backupRows.length ? "" : `<div class="empty">這天還沒有細部行程，按「＋」新增</div>`
       }
+      ${backupRows.length ? `<details class="wx-backup-fold">
+        <summary>🌦️ 天氣備案（${backupRows.length} 項，點開看）</summary>
+        ${schedTable(backupRows)}
+      </details>` : ""}
     </div>`;
 }
 

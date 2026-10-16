@@ -428,6 +428,18 @@ table.sched td.s-ops { white-space: nowrap; text-align: right; }
 .stay-b-booked { color: #065f46; background: #d1fae5; }
 .stay-b-picked { color: #065f46; background: #a7f3d0; }
 .stay-b-dropped { color: #57534e; background: #e7e5e4; }
+.stay-item.stay-primary { border: 2px solid var(--brand); }
+.stay-item.stay-cancel { opacity: .7; background: var(--card); }
+.stay-b-primary { color: #fff; background: var(--brand); }
+.stay-b-cancel { color: #9f1239; background: #ffe4e6; }
+.stay-fold > summary { cursor: pointer; list-style: none; color: var(--text-dim); }
+.stay-fold > summary::-webkit-details-marker { display: none; }
+.stay-fold > summary::before { content: "▸ "; }
+.stay-fold[open] > summary::before { content: "▾ "; }
+/* 每日行程：天氣備案收合區（status = weather backup 的列）*/
+.wx-backup-fold { margin-top: 10px; border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; }
+.wx-backup-fold > summary { cursor: pointer; font-size: 14px; font-weight: 700; color: #1e3a8a; }
+.wx-backup-fold[open] > summary { margin-bottom: 6px; }
 .stay-area { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
 .stay-line {
   display: flex; gap: 6px; margin-top: 5px;
