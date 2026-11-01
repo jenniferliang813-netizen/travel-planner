@@ -1529,7 +1529,7 @@ function noteCard() {
       <h2>📌 提醒與備註</h2>
       <button class="edit-btn" id="note-add">＋ 新增</button>
     </div>
-    <div class="note-list">${items.map((n) => `<details class="note-item">
+    <div class="note-list">${items.map((n) => `<details class="note-item${n.tone === "muted" ? " note-muted" : ""}">
       <summary><span>${esc(n.title || "")}</span><button class="mini-btn" data-editnote="${n.id}">✏️</button></summary>
       <div class="note-body">${esc(n.body || "")}</div>
     </details>`).join("")}</div>
@@ -1561,6 +1561,7 @@ function openNoteModal(editId) {
         title,
         body: el.querySelector("#nt-body").value.trim(),
         order: item ? item.order ?? nextOrder : nextOrder,
+        ...(item && item.tone ? { tone: item.tone } : {}), // keep grey "muted" style on edit
       }});
       closeModal();
     });
