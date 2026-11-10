@@ -1012,6 +1012,7 @@ function foodRow(it) {
     ${thumb(it.img, FOOD_ICON[it.kind] || "🍴")}
     <div class="l-name">${esc(it.name)}${it.desc ? `<div class="l-note">${esc(it.desc)}</div>` : ""}</div>
     ${placeLink(it.place)}
+    ${it.link ? `<a class="shop-link" href="${esc(it.link)}" target="_blank" rel="noopener">🔗 貼文</a>` : ""}
     ${
       view.bagManage
         ? `<button class="mini-btn" data-foodedit="${it.id}">✏️</button><button class="mini-btn danger" data-fooddel="${it.id}">🗑️</button>`
@@ -1098,6 +1099,7 @@ function openFoodModal(editId) {
     <div class="field" id="fd-newcity-wrap" style="display:${cities.length ? "none" : ""}"><label>新城市（建議寫「城市｜日期」）</label><input id="fd-newcity" placeholder="例：🇮🇪 Dublin｜9/26–10/1" /></div>
     <div class="field"><label>一句話說明</label><input id="fd-desc" value="${esc(it ? it.desc || "" : "")}" placeholder="例：香腸培根馬鈴薯燉菜｜The Brazen Head" /></div>
     <div class="field"><label>Google Maps 地點（店名＋地址）</label><input id="fd-place" value="${esc(it ? it.place || "" : "")}" placeholder="例：The Brazen Head, 20 Lower Bridge St, Dublin 8" /></div>
+    <div class="field"><label>參考連結</label><input id="fd-link" value="${esc(it ? it.link || "" : "")}" placeholder="貼 IG／Threads 貼文網址，清單上會出現 🔗" /></div>
     <div class="field"><label>小圖路徑</label><input id="fd-img" value="${esc(it ? it.img || "" : "")}" placeholder="例：img/food/coddle.jpg（沒有就留空）" /></div>
     <div class="field"><label>列在哪天的行程大綱</label>${daySelect("fd-day", it && it.dayId)}</div>
     <div class="btn-row">
@@ -1123,6 +1125,7 @@ function openFoodModal(editId) {
           name,
           desc: el.querySelector("#fd-desc").value.trim(),
           place: el.querySelector("#fd-place").value.trim(),
+          link: el.querySelector("#fd-link").value.trim(),
           img: el.querySelector("#fd-img").value.trim(),
           dayId: el.querySelector("#fd-day").value,
           order: it ? it.order ?? 0 : maxOrder + 1,
@@ -1521,6 +1524,10 @@ function noteItems() {
     .map(([id, n]) => ({ id, ...n }))
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
+// Escape text, then turn bare http(s) URLs into clickable links (note bodies are plain text).
+function linkify(text) {
+  return esc(text).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+}
 function noteCard() {
   const items = noteItems();
   if (!items.length) return "";
@@ -1531,7 +1538,7 @@ function noteCard() {
     </div>
     <div class="note-list">${items.map((n) => `<details class="note-item${n.tone === "muted" ? " note-muted" : ""}">
       <summary><span>${esc(n.title || "")}</span><button class="mini-btn" data-editnote="${n.id}">✏️</button></summary>
-      <div class="note-body">${esc(n.body || "")}</div>
+      <div class="note-body">${linkify(n.body || "")}</div>
     </details>`).join("")}</div>
   </div>`;
 }

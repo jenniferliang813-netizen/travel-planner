@@ -490,7 +490,7 @@ table.sched td.s-ops { white-space: nowrap; text-align: right; }
 .note-item summary::before { content: "▸"; color: var(--brand); transition: transform .15s; }
 .note-item[open] summary::before { transform: rotate(90deg); }
 .note-item summary span { flex: 1; min-width: 0; }
-.note-body { white-space: pre-wrap; font-size: 13px; line-height: 1.6; padding: 0 12px 10px 26px; color: var(--text); }
+.note-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; padding: 0 12px 10px 26px; color: var(--text); }
 /* note.tone === "muted": neutral grey card for set-aside alternatives */
 .note-item.note-muted { background: #f3f3f2; border-color: #d9d9d6; }
 .note-item.note-muted summary { color: #6b6b68; font-weight: 600; }
