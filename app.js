@@ -168,7 +168,10 @@ let lastError = "";
 const view = {
   bagPerson: null, // 行李頁看誰的勾選
   bagManage: false, // 行李頁管理模式
-  bagTab: "lug", // 行李頁內切換：lug=行李清單、shop=採購清單、food=吃喝
+  bagTab: null, // 行李頁內切換：lug=行李清單、shop=採購清單、food=吃喝；null＝還沒決定（見 bagTabDefault）
+  outlineTab: "plan", // 行程大綱頁內切換：plan=行程、todo=待辦、note=備註、stay=住宿
+  todoDoneOpen: false, // 待辦頁「已完成」摺疊區是否展開
+  todayScrolled: false, // 旅途中進大綱頁只自動捲到「今天」一次
   mapQuery: null, // 大綱頁目前地圖查詢字
   schedDay: null, // 每日行程頁目前選的天（dayId 或 "all"）
 };
@@ -229,7 +232,10 @@ function onRoute() {
     currentTripId = tripId;
     view.bagPerson = null;
     view.bagManage = false;
-    view.bagTab = "lug";
+    view.bagTab = null;
+    view.outlineTab = "plan";
+    view.todoDoneOpen = false;
+    view.todayScrolled = false;
     view.mapQuery = null;
     view.schedDay = null;
     if (tripId) {
@@ -516,7 +522,20 @@ function openNewTripModal() {
 // =====================================================================
 // 旅行主畫面（五頁籤）
 // =====================================================================
+// Trip is happening today? (startDate <= today <= endDate, device local date)
+function tripInProgress() {
+  const today = isoLocal(new Date());
+  return !!trip.startDate && !!trip.endDate && trip.startDate <= today && today <= trip.endDate;
+}
+// Bag-page sub tab: the choice saved on this device wins; otherwise packing list before/after the trip, shopping during it
+function bagTabDefault() {
+  const saved = localStorage.getItem("tp-bagtab-" + currentTripId);
+  if (["lug", "shop", "food"].includes(saved)) return saved;
+  return tripInProgress() ? "shop" : "lug";
+}
+
 function renderTrip(tab) {
+  if (view.bagTab === null) view.bagTab = bagTabDefault();
   const tabsHtml = TABS.map(
     (t) =>
       `<button class="tab ${t.key === tab ? "active" : ""}" data-tab="${t.key}">
@@ -544,7 +563,8 @@ function renderTrip(tab) {
 
 function fabFor(tab) {
   const bagLabel = { shop: "新增採購項目", food: "新增吃喝項目" }[view.bagTab] || "新增行李";
-  const map = { bag: bagLabel, outline: "新增一天", day: "新增行程", money: "新增一筆帳" };
+  const outlineLabel = { todo: "新增待辦", note: "新增備註", stay: "新增住宿" }[view.outlineTab] || "新增一天";
+  const map = { bag: bagLabel, outline: outlineLabel, day: "新增行程", money: "新增一筆帳" };
   if (!map[tab]) return "";
   return `<button class="fab" id="fab-add" title="${map[tab]}">＋</button>`;
 }
@@ -558,7 +578,12 @@ function bindTripPage(tab) {
         else if (view.bagTab === "food") openFoodModal();
         else openBagItemModal();
       }
-      else if (tab === "outline") openDayModal();
+      else if (tab === "outline") {
+        if (view.outlineTab === "todo") openTodoModal();
+        else if (view.outlineTab === "note") openNoteModal();
+        else if (view.outlineTab === "stay") openStayModal();
+        else openDayModal();
+      }
       else if (tab === "day") openSchedModal();
       else if (tab === "money") openExpenseModal();
     });
@@ -1195,6 +1220,7 @@ function bindBag() {
   document.querySelectorAll("[data-bagtab]").forEach((b) =>
     b.addEventListener("click", () => {
       view.bagTab = b.dataset.bagtab;
+      localStorage.setItem("tp-bagtab-" + currentTripId, view.bagTab); // remember on this device
       render();
     })
   );
@@ -1502,20 +1528,49 @@ function todoItems() {
 
 function todoCard() {
   const items = todoItems();
-  return `<div class="card todo-card">
-    <div class="card-head">
-      <h2>🔔 待辦提醒</h2>
-      ${noteItems().length ? "" : `<button class="edit-btn" id="note-add">📌 加備註</button>`}
-      <button class="edit-btn" id="todo-add">＋ 新增</button>
-    </div>
-    ${items.length
-      ? `<div class="todo-list">${items.map((item) => `<div class="todo-item ${item.done ? "done" : ""}">
+  const row = (item) => `<div class="todo-item ${item.done ? "done" : ""}">
           <input type="checkbox" data-todotoggle="${item.id}" ${item.done ? "checked" : ""} />
           <div class="todo-text"><b>${esc(item.text)}</b>${item.note ? `<span>${esc(item.note)}</span>` : ""}</div>
           <button class="mini-btn" data-edittodo="${item.id}">✏️</button>
-        </div>`).join("")}</div>`
-      : `<div class="empty">目前沒有待辦提醒</div>`}
+        </div>`;
+  const open = items.filter((t) => !t.done);
+  const done = items.filter((t) => t.done);
+  return `<div class="card todo-card">
+    <div class="card-head">
+      <h2>🔔 待辦提醒</h2>
+      <button class="edit-btn" id="todo-add">＋ 新增</button>
+    </div>
+    ${open.length
+      ? `<div class="todo-list">${open.map(row).join("")}</div>`
+      : `<div class="empty">${items.length ? "🎉 待辦全部完成了" : "目前沒有待辦提醒"}</div>`}
+    ${done.length ? `<details class="todo-done-fold" id="todo-done-fold" ${view.todoDoneOpen ? "open" : ""}>
+      <summary>✅ 已完成（${done.length} 項，點開看）</summary>
+      <div class="todo-list">${done.map(row).join("")}</div>
+    </details>` : ""}
   </div>`;
+}
+// One-line reminder on top of the outline "plan" view: first unfinished todo (flagged ones first)
+function nextTodoLine() {
+  const open = todoItems().filter((t) => !t.done);
+  if (!open.length) return "";
+  const top = open.find((t) => /🔴|⚠️|❗/.test(t.text || "")) || open[0];
+  return `<button class="todo-next" id="todo-next">
+    <span class="todo-next-text">🔔 ${esc(top.text || "")}</span>
+    <span class="todo-next-more">${open.length > 1 ? `還有 ${open.length - 1} 件 ›` : "看待辦 ›"}</span>
+  </button>`;
+}
+// Sub tabs inside the outline page (same pattern as the bag page chips)
+function outlineTabSwitch() {
+  const n = todoItems().filter((t) => !t.done).length;
+  const tabs = [
+    ["plan", "🗺️ 行程"],
+    ["todo", `🔔 待辦${n ? `<span class="chip-count">${n}</span>` : ""}`],
+    ["note", "📌 備註"],
+    ["stay", "🏨 住宿"],
+  ];
+  return `<div class="chips" style="margin-bottom:10px">${tabs
+    .map(([k, label]) => `<button class="chip ${view.outlineTab === k ? "active" : ""}" data-outlinetab="${k}">${label}</button>`)
+    .join("")}</div>`;
 }
 
 // ---- 提醒與備註卡（trip.notes = { <uid>: {title, body, order} }；沒有就不顯示）----
@@ -1530,12 +1585,12 @@ function linkify(text) {
 }
 function noteCard() {
   const items = noteItems();
-  if (!items.length) return "";
   return `<div class="card note-card">
     <div class="card-head">
       <h2>📌 提醒與備註</h2>
       <button class="edit-btn" id="note-add">＋ 新增</button>
     </div>
+    ${items.length ? "" : `<div class="empty">還沒有備註，按「＋ 新增」加第一則</div>`}
     <div class="note-list">${items.map((n) => `<details class="note-item${n.tone === "muted" ? " note-muted" : ""}">
       <summary><span>${esc(n.title || "")}</span><button class="mini-btn" data-editnote="${n.id}">✏️</button></summary>
       <div class="note-body">${linkify(n.body || "")}</div>
@@ -1616,7 +1671,6 @@ function stayBlock(s) {
 
 function stayCard() {
   const items = stayItems();
-  if (!items.length) return ""; // 沒有住宿候選就整張卡不顯示（避免其他旅行多一張空卡）
   const groups = [];
   items.forEach((s) => {
     const g = s.group || "住宿候選";
@@ -1627,6 +1681,7 @@ function stayCard() {
       <h2>🏨 住宿比較</h2>
       <button class="edit-btn" id="stay-add">＋ 新增</button>
     </div>
+    ${items.length ? "" : `<div class="empty">還沒有住宿資料，按「＋ 新增」加第一筆</div>`}
     ${groups.map((g) => {
       const list = items.filter((s) => (s.group || "住宿候選") === g);
       const grid = `<div class="stay-grid">${list.map(stayBlock).join("")}</div>`;
@@ -1856,14 +1911,19 @@ function mapEmbed(query) {
 }
 
 function pageOutline() {
+  const sw = outlineTabSwitch();
+  if (view.outlineTab === "todo") return sw + todoCard();
+  if (view.outlineTab === "note") return sw + noteCard();
+  if (view.outlineTab === "stay") return sw + stayCard();
   const days = dayList();
+  const today = isoLocal(new Date());
   const left = days.length
     ? days
         .map(
-          (d) => `<div class="card day-card">
+          (d) => `<div class="card day-card${dayIsoDate(d) === today ? " today" : ""}">
             <div class="card-head">
               <div style="flex:1">
-                <span class="d-title">Day ${d.n}</span>
+                <span class="d-title">Day ${d.n}</span>${dayIsoDate(d) === today ? `<span class="today-badge">今天</span>` : ""}
                 <span class="d-date">${esc(d.date || "")}</span>
                 ${d.title ? `　<b style="font-size:14px">${esc(d.title)}</b>` : ""}
               </div>
@@ -1900,14 +1960,20 @@ function pageOutline() {
         <div class="map-hint">實線＝移動路線、虛線＝一日遊/飛行段。點 📍 開 Google Maps${showNaverMaps() ? "、點 N 開 Naver Map" : ""}。</div>
       </div>`
     : `<div class="card">${mapEmbed(view.mapQuery)}<button class="edit-btn" id="route-edit" style="margin-top:8px">🗺️ 建立行程簡圖</button></div>`;
-  // order: phases → stays → day outline + map → todos → notes
-  return `${tripPhaseCard()}${stayCard()}<div class="outline-layout">
+  // "plan" view: next-todo line → phases → day outline + map (todos / notes / stays live in their own sub tabs)
+  return `${sw}${nextTodoLine()}${tripPhaseCard()}<div class="outline-layout">
     <div>${left}</div>
     <div class="map-panel">${mapCard}</div>
-  </div>${todoCard()}${noteCard()}`;
+  </div>`;
 }
 
 function bindOutline() {
+  const goTab = (k) => { view.outlineTab = k; render(); window.scrollTo(0, 0); };
+  document.querySelectorAll("[data-outlinetab]").forEach((b) =>
+    b.addEventListener("click", () => goTab(b.dataset.outlinetab))
+  );
+  document.getElementById("todo-next")?.addEventListener("click", () => goTab("todo"));
+  document.getElementById("todo-done-fold")?.addEventListener("toggle", (e) => { view.todoDoneOpen = e.target.open; });
   document.querySelectorAll("[data-editday]").forEach((b) =>
     b.addEventListener("click", () => openDayModal(b.dataset.editday))
   );
@@ -1946,7 +2012,13 @@ function bindOutline() {
     b.addEventListener("click", () => openStayModal(b.dataset.editstay))
   );
   document.getElementById("route-edit")?.addEventListener("click", openRouteModal);
+  if (view.outlineTab !== "plan") return;
   initRouteMap();
+  // During the trip: scroll to today's card once per visit
+  if (!view.todayScrolled) {
+    view.todayScrolled = true;
+    document.querySelector(".day-card.today")?.scrollIntoView({ block: "start" });
+  }
 }
 
 function openTodoModal(editId) {
@@ -2232,7 +2304,7 @@ function pageDay() {
   const dayIds = new Set(days.map((d) => d.id));
   const hasOrphan = rows.some((r) => !dayIds.has(r.dayId));
   if (view.schedDay === null || (view.schedDay !== "orphan" && !dayIds.has(view.schedDay)))
-    view.schedDay = days[0] ? days[0].id : "orphan";
+    view.schedDay = (days.find((d) => dayIsoDate(d) === isoLocal(new Date())) || days[0] || { id: "orphan" }).id; // today's day during the trip
 
   const chips = [
     ...days.map((d) => ({ key: d.id, label: `Day ${d.n}` })),

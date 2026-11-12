@@ -262,6 +262,27 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); bor
 }
 .todo-card { margin-bottom: 12px; }
 .outline-layout + .todo-card { margin-top: 12px; }
+/* outline sub tabs: unfinished-todo count, next-todo line, finished fold, today's card */
+.chip-count {
+  display: inline-block; margin-left: 5px; padding: 0 6px; border-radius: 99px;
+  background: var(--accent); color: #fff; font-size: 12px; font-weight: 700;
+}
+.todo-next {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  margin-bottom: 12px; padding: 9px 12px; text-align: left;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--brand-soft); color: var(--text); font-size: 13px; cursor: pointer;
+}
+.todo-next-text { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-next-more { flex: none; color: var(--brand); font-size: 12px; }
+.todo-done-fold { margin-top: 10px; border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; }
+.todo-done-fold > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text-dim); }
+.todo-done-fold[open] > summary { margin-bottom: 8px; }
+.day-card.today { border: 2px solid var(--brand); scroll-margin-top: 110px; }
+.today-badge {
+  display: inline-block; margin: 0 6px; padding: 1px 8px; border-radius: 99px;
+  background: var(--brand); color: #fff; font-size: 12px; font-weight: 700;
+}
 .todo-list { display: grid; gap: 7px; }
 .todo-item {
   display: flex; align-items: center; gap: 9px;
