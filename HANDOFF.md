@@ -29,6 +29,8 @@
 - 瀏覽／編輯模式（v=28）：預設是**瀏覽模式**（`body.view-mode`，CSS 藏起 `.edit-btn`／`.mini-btn`／`.fab`／每日行程表最後一欄），右上角「✏️ 編輯」才出現新增／修改／刪除入口，選擇記在該裝置 `localStorage["tp-edit"]`。瀏覽模式仍可用：行李／採購／待辦勾選、記帳（`.fab.keep-view`）、分享（`.edit-btn.keep-view`）。**新增任何編輯入口請沿用 `.edit-btn`／`.mini-btn`／`.fab` 這三個 class**，瀏覽模式才會自動藏；要在瀏覽模式保留的加 `keep-view`。
 - 離線（v=28）：(1) Firestore 開了本機持久快取（`persistentLocalCache`），看過的旅行沒網路也讀得到，離線時的勾選／記帳會排隊、恢復網路自動上傳；`updateTrip` 最多等伺服器 2 秒就放行（山區「有格沒網路」時不會卡住視窗）。(2) `sw.js`（service worker）快取網頁檔、Firebase／Leaflet 程式庫、`img/` 圖片、看過的地圖圖磚；開頁先等網路 2.5 秒，等不到就用存下來的版本。**`sw.js` 不含版本號**，安裝時自己讀 `index.html` 找目前的 `?v=N`，所以改版仍然只要改 `index.html` 的兩個 `?v=N`。(3) 沒網路（`navigator.onLine === false`）時強制瀏覽模式、右上角顯示「📴 離線」。天氣與地點搜尋需要網路。
 - 加到主畫面（v=28）：`manifest.webmanifest`＋`icons/`（由本機腳本產生的 PNG）。manifest **刻意不寫 `start_url`**，這樣旅伴從 `?trip=<id>` 分享連結加到主畫面時會保留該連結；另有 `localStorage["tp-locked-trip"]` 備援（只在主畫面 App 模式下採用）。
+- 封面頁（v=29）：進旅行後的第一個畫面是 `#/t/<id>/home`（頁籤列最左邊「🏠 封面」；不認得的頁籤名稱也會落到這裡）。內容＝封面照（`trip.cover = {img, credit}`，選填；沒有就用主題色）＋「查看今日行程」大按鈕＋今天（或出發前的 Day 1）前 4 項行程＋航班／住宿／待辦／清單四顆捷徑。封面照放 `img/cover/`，只用自由授權圖，來源寫進 `img/cover/CREDITS.md`。
+- 每日行程手機卡片（v=29）：`schedTable()` 同時輸出卡片（`.sched-cards`，`schedCard()`）與表格（`.table-wrap.sched-wrap`），CSS 在 699px 以下顯示卡片、以上顯示表格。**改每日行程的欄位時兩邊都要改。** 卡片有 `place` 才出現整排寬的「🧭 地圖導航」。
 - `worker/`：Cloudflare Worker 唯讀 API（秘密在 Cloudflare secrets，不在 repo）。
 
 ## 改程式必守的規則

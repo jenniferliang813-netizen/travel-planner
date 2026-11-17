@@ -221,7 +221,7 @@ const DEFAULT_LUGGAGE = [
 // =====================================================================
 function parseRoute() {
   const m = location.hash.match(/^#\/t\/([^/]+)\/?([a-z]*)/);
-  if (m) return { tripId: m[1], tab: TABS.some((t) => t.key === m[2]) ? m[2] : "flight" };
+  if (m) return { tripId: m[1], tab: TABS.some((t) => t.key === m[2]) ? m[2] : "home" }; // "home" = cover page
   return { tripId: null, tab: null };
 }
 function nav(hash) {
@@ -281,7 +281,7 @@ window.addEventListener("unhandledrejection", (e) => {
 
 function onRoute() {
   if (lockedTripId && !parseRoute().tripId) {
-    location.hash = "#/t/" + lockedTripId + "/flight";
+    location.hash = "#/t/" + lockedTripId + "/home";
     return; // hashchange 會再進來一次
   }
   const { tripId } = parseRoute();
@@ -530,7 +530,7 @@ function renderHome() {
     <button class="fab" id="fab-new" title="新增旅行">＋</button>`;
   bindTopbar();
   document.querySelectorAll(".trip-card").forEach((c) =>
-    c.addEventListener("click", () => nav("#/t/" + c.dataset.id + "/flight"))
+    c.addEventListener("click", () => nav("#/t/" + c.dataset.id + "/home"))
   );
   document.getElementById("fab-new").addEventListener("click", openNewTripModal);
 }
@@ -610,14 +610,15 @@ function bagTabDefault() {
 
 function renderTrip(tab) {
   if (view.bagTab === null) view.bagTab = bagTabDefault();
-  const tabsHtml = TABS.map(
+  const tabsHtml = [{ key: "home", icon: "🏠", label: "封面" }, ...TABS].map(
     (t) =>
       `<button class="tab ${t.key === tab ? "active" : ""}" data-tab="${t.key}">
         <span class="t-icon">${t.icon}</span>${t.label}
       </button>`
   ).join("");
   let body = "";
-  if (tab === "flight") body = pageFlight();
+  if (tab === "home") body = pageCover();
+  else if (tab === "flight") body = pageFlight();
   else if (tab === "bag") body = pageBag();
   else if (tab === "outline") body = pageOutline();
   else if (tab === "day") body = pageDay();
@@ -663,11 +664,116 @@ function bindTripPage(tab) {
       else if (tab === "day") openSchedModal();
       else if (tab === "money") openExpenseModal();
     });
-  if (tab === "flight") bindFlight();
+  if (tab === "home") bindCover();
+  else if (tab === "flight") bindFlight();
   else if (tab === "bag") bindBag();
   else if (tab === "outline") bindOutline();
   else if (tab === "day") bindDay();
   else if (tab === "money") bindMoney();
+}
+
+// ---------------------------------------------------------------------
+// 頁 0：封面（進旅行後第一個畫面：封面照＋「查看今日行程」大按鈕＋今天摘要）
+// trip.cover = { img: "img/cover/xxx.jpg" | https URL, credit: "photo credit" }（選填）
+// ---------------------------------------------------------------------
+function coverState() {
+  const days = dayList();
+  const today = isoLocal(new Date());
+  const todayDay = days.find((d) => dayIsoDate(d) === today);
+  let phase = "none"; // none (no dates) | before | during | after
+  let daysLeft = 0;
+  if (trip.startDate && today < trip.startDate) {
+    phase = "before";
+    daysLeft = Math.round((new Date(trip.startDate + "T00:00") - new Date(today + "T00:00")) / 864e5);
+  } else if (trip.endDate && today > trip.endDate) phase = "after";
+  else if (todayDay) phase = "during";
+  const focus = todayDay || (phase === "after" ? null : days[0]) || null;
+  return { phase, daysLeft, focus };
+}
+
+function pageCover() {
+  const { phase, daysLeft, focus } = coverState();
+  const c = trip.cover || {};
+  const rows = focus
+    ? schedRows().filter((r) => r.dayId === focus.id && r.status !== "weather backup" && r.act)
+    : [];
+  const label =
+    phase === "during" ? `今天・Day ${focus.n}`
+    : phase === "before" ? `還有 ${daysLeft} 天出發${focus ? `・Day ${focus.n} 預覽` : ""}`
+    : phase === "after" ? "旅程已結束"
+    : focus ? `Day ${focus.n}` : "";
+  const cta = phase === "during" ? "查看今日行程" : "查看每日行程";
+  const openTodos = todoItems().filter((t) => !t.done).length;
+  return `
+    <div class="cover-hero${c.img ? " has-img" : ""}">
+      ${c.img ? `<img src="${esc(c.img)}" alt="" />` : `<span class="cover-emoji">✈️</span>`}
+      <div class="cover-text">
+        <div class="cover-dates">${esc(trip.startDate || "")}${trip.endDate ? " ~ " + esc(trip.endDate) : ""}${trip.destination ? "　" + esc(trip.destination) : ""}</div>
+        <div class="cover-name">${esc(trip.name)}</div>
+      </div>
+    </div>
+    <button class="cover-cta" id="cover-go"><span>📅</span><span class="cover-cta-label">${cta}</span><span>→</span></button>
+    ${
+      label || focus
+        ? `<div class="card cover-today" id="cover-today">
+            <div class="cover-label">${esc(label)}</div>
+            ${focus ? `<div class="cover-title">${esc(focus.title || focus.date || "")}</div>` : `<div class="cover-title">行程、清單與記帳都還看得到</div>`}
+            ${rows.slice(0, 4).map((r) => `<div class="cover-row"><span class="cover-time">${esc(r.time || "・")}</span><span>${esc(r.act)}</span></div>`).join("")}
+            ${rows.length > 4 ? `<div class="cover-more">…還有 ${rows.length - 4} 項，點這裡看全部</div>` : ""}
+          </div>`
+        : ""
+    }
+    <div class="cover-quick">
+      <button data-cover-go="flight">✈️ 航班</button>
+      <button data-cover-go="outline:stay">🏨 住宿</button>
+      <button data-cover-go="outline:todo">🔔 待辦${openTodos ? ` <b>${openTodos}</b>` : ""}</button>
+      <button data-cover-go="bag">🧳 清單</button>
+    </div>
+    <div class="cover-foot">
+      ${c.credit ? `<span class="cover-credit">封面照片：${esc(c.credit)}</span>` : ""}
+      <button class="edit-btn" id="cover-edit">🖼️ 更換封面照片</button>
+    </div>`;
+}
+
+function bindCover() {
+  const { focus } = coverState();
+  const goDay = () => {
+    if (focus) view.schedDay = focus.id;
+    nav(`#/t/${currentTripId}/day`);
+  };
+  document.getElementById("cover-go").addEventListener("click", goDay);
+  document.getElementById("cover-today")?.addEventListener("click", goDay);
+  document.querySelectorAll("[data-cover-go]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const [tab, sub] = b.dataset.coverGo.split(":");
+      if (tab === "outline" && sub) view.outlineTab = sub;
+      nav(`#/t/${currentTripId}/${tab}`);
+    })
+  );
+  document.getElementById("cover-edit").addEventListener("click", openCoverModal);
+}
+
+function openCoverModal() {
+  const c = trip.cover || {};
+  openModal(`
+    <h3>🖼️ 封面照片</h3>
+    <div class="field"><label>圖片位置（網站內的路徑或圖片網址）</label><input id="cv-img" value="${esc(c.img || "")}" placeholder="例：img/cover/aso.jpg" /></div>
+    <div class="field"><label>照片來源／攝影者（選填）</label><input id="cv-credit" value="${esc(c.credit || "")}" /></div>
+    <p class="form-hint">留空＝不放照片，改用這趟旅行的主題色。想換照片可以把圖給 AI，請它放進網站。</p>
+    <div class="btn-row">
+      <button class="btn secondary" id="cv-cancel">取消</button>
+      <button class="btn" id="cv-save">儲存</button>
+    </div>
+  `, (el) => {
+    el.querySelector("#cv-cancel").addEventListener("click", closeModal);
+    el.querySelector("#cv-save").addEventListener("click", async () => {
+      const img = el.querySelector("#cv-img").value.trim();
+      await store.updateTrip(currentTripId, {
+        cover: img ? { img, credit: el.querySelector("#cv-credit").value.trim() } : DELETE,
+      });
+      closeModal();
+    });
+  });
 }
 
 // ---------------------------------------------------------------------
@@ -827,7 +933,7 @@ function bindFlight() {
   );
   document.getElementById("share-trip").addEventListener("click", async () => {
     // 專屬連結：旅伴打開只看到這一個行程
-    const url = location.origin + location.pathname + "?trip=" + currentTripId + "#/t/" + currentTripId + "/flight";
+    const url = location.origin + location.pathname + "?trip=" + currentTripId + "#/t/" + currentTripId + "/home";
     if (navigator.share) {
       try { await navigator.share({ title: trip.name, url }); return; } catch { /* 使用者取消分享，改走複製 */ }
     }
@@ -2356,8 +2462,31 @@ function schedRows() {
 }
 
 // One schedule table; weather-backup rows are rendered separately inside a <details> fold
+// Phone-width version of one schedule row: big time/name, full-width navigation button
+function schedCard(r) {
+  const meta = [r.stay && `停留 ${r.stay}`, r.trans].filter(Boolean).join("・");
+  return `<div class="sc-card">
+    <div class="sc-head">
+      ${r.time ? `<span class="sc-time">${esc(r.time)}</span>` : ""}
+      <span class="sc-act">${esc(r.act || "")}</span>
+      <span class="sc-ops"><button class="mini-btn" data-editsched="${r.id}">✏️</button><button class="mini-btn danger" data-delsched="${r.id}">🗑️</button></span>
+    </div>
+    ${r.status ? `<div class="sc-badge">${statusBadge(r.status)}</div>` : ""}
+    ${meta ? `<div class="sc-meta">${esc(meta)}</div>` : ""}
+    ${r.note ? `<div class="sc-note">${esc(r.note)}</div>` : ""}
+    ${
+      r.place
+        ? `<div class="sc-navrow"><a class="sc-nav" href="${gmapUrl(r.place)}" target="_blank" rel="noopener">🧭 地圖導航</a>${
+            showNaverMaps() ? `<a class="sc-nav sc-naver" href="${nmapUrl(r.place)}" target="_blank" rel="noopener" title="Naver Map">N</a>` : ""
+          }</div>`
+        : ""
+    }
+  </div>`;
+}
+
+// Table on wide screens, cards on phones (CSS picks one; both are in the DOM)
 function schedTable(list) {
-  return `<div class="table-wrap"><table class="sched">
+  return `<div class="sched-cards">${list.map(schedCard).join("")}</div><div class="table-wrap sched-wrap"><table class="sched">
     <thead><tr><th>時間</th><th>行程</th><th>停留</th><th>交通</th><th>備註</th><th></th></tr></thead>
     <tbody>${list.map((r) => `<tr>
                     <td class="s-time">${esc(r.time || "—")}</td>
@@ -2726,7 +2855,7 @@ const offlineSaved = new Set();
 function saveTripImagesOffline() {
   if (!trip || !isOnline || !("caches" in window) || offlineSaved.has(currentTripId)) return;
   offlineSaved.add(currentTripId);
-  const urls = [...Object.values(trip.food || {}), ...Object.values(trip.shopping || {})]
+  const urls = [trip.cover, ...Object.values(trip.food || {}), ...Object.values(trip.shopping || {})]
     .map((x) => x && x.img)
     .filter((s) => s && !/^https?:/i.test(s))
     .map((s) => new URL(s, location.href).href);
