@@ -1,0 +1,14 @@
+{
+  "name": "婷瑋的出國旅行計畫",
+  "short_name": "旅行計畫",
+  "description": "行程、行李、記帳，旅伴共用的旅行計畫",
+  "lang": "zh-Hant",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f7",
+  "theme_color": "#0e7490",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

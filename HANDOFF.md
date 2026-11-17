@@ -26,6 +26,9 @@
 - 貼文連結（v=26）：吃喝項目可填 `link`（顯示「🔗 貼文」）；備註卡內文裡的 http(s) 網址會自動變成可點連結。
 - 備註卡（v=25）：`trip.notes` 某筆加 `tone: "muted"` 會顯示成灰底中性卡（用來放「目前不採用」的備案路線）；在網頁編輯該則時會保留 `tone`。
 - 頁內切換（v=27）：行程大綱頁有四個切換鈕（`view.outlineTab`：行程／待辦／備註／住宿），待辦、備註、住宿不再排在每日大綱下方；已勾選的待辦收進「✅ 已完成」摺疊區；行程頁最上面一行顯示下一件未完成待辦。行李頁的行李／採購／吃喝切換會記在該裝置（`localStorage["tp-bagtab-<tripId>"]`），沒記錄時旅途中預設採購、其餘預設行李。旅途中「每日行程」預設選今天、大綱頁自動捲到今天的日卡。
+- 瀏覽／編輯模式（v=28）：預設是**瀏覽模式**（`body.view-mode`，CSS 藏起 `.edit-btn`／`.mini-btn`／`.fab`／每日行程表最後一欄），右上角「✏️ 編輯」才出現新增／修改／刪除入口，選擇記在該裝置 `localStorage["tp-edit"]`。瀏覽模式仍可用：行李／採購／待辦勾選、記帳（`.fab.keep-view`）、分享（`.edit-btn.keep-view`）。**新增任何編輯入口請沿用 `.edit-btn`／`.mini-btn`／`.fab` 這三個 class**，瀏覽模式才會自動藏；要在瀏覽模式保留的加 `keep-view`。
+- 離線（v=28）：(1) Firestore 開了本機持久快取（`persistentLocalCache`），看過的旅行沒網路也讀得到，離線時的勾選／記帳會排隊、恢復網路自動上傳；`updateTrip` 最多等伺服器 2 秒就放行（山區「有格沒網路」時不會卡住視窗）。(2) `sw.js`（service worker）快取網頁檔、Firebase／Leaflet 程式庫、`img/` 圖片、看過的地圖圖磚；開頁先等網路 2.5 秒，等不到就用存下來的版本。**`sw.js` 不含版本號**，安裝時自己讀 `index.html` 找目前的 `?v=N`，所以改版仍然只要改 `index.html` 的兩個 `?v=N`。(3) 沒網路（`navigator.onLine === false`）時強制瀏覽模式、右上角顯示「📴 離線」。天氣與地點搜尋需要網路。
+- 加到主畫面（v=28）：`manifest.webmanifest`＋`icons/`（由本機腳本產生的 PNG）。manifest **刻意不寫 `start_url`**，這樣旅伴從 `?trip=<id>` 分享連結加到主畫面時會保留該連結；另有 `localStorage["tp-locked-trip"]` 備援（只在主畫面 App 模式下採用）。
 - `worker/`：Cloudflare Worker 唯讀 API（秘密在 Cloudflare secrets，不在 repo）。
 
 ## 改程式必守的規則

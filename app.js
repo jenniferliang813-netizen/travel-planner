@@ -106,13 +106,23 @@ async function makeFirebaseStore() {
     import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"),
   ]);
   const app = appMod.initializeApp(firebaseConfig);
-  const db = fsMod.getFirestore(app);
+  // Persistent IndexedDB cache: trips read once stay readable offline, and offline writes are queued
+  let db;
+  try {
+    db = fsMod.initializeFirestore(app, {
+      localCache: fsMod.persistentLocalCache({ tabManager: fsMod.persistentMultipleTabManager() }),
+    });
+  } catch {
+    db = fsMod.getFirestore(app);
+  }
   let authWarning = "";
   try {
+    // An already signed-in anonymous user is reused without network, so this also works offline
     await authMod.signInAnonymously(authMod.getAuth(app));
   } catch (e) {
-    authWarning =
-      "Firebase 匿名登入失敗（請到 Firebase 主控台 → Authentication → 啟用「匿名」登入）：" + e.code;
+    if (navigator.onLine && e.code !== "auth/network-request-failed")
+      authWarning =
+        "Firebase 匿名登入失敗（請到 Firebase 主控台 → Authentication → 啟用「匿名」登入）：" + e.code;
   }
   const col = fsMod.collection(db, "trips");
   const toPatch = (patch) => {
@@ -146,7 +156,16 @@ async function makeFirebaseStore() {
       await fsMod.setDoc(fsMod.doc(db, "trips", id), docData);
     },
     async updateTrip(id, patch) {
-      await fsMod.updateDoc(fsMod.doc(db, "trips", id), toPatch(patch));
+      const p = fsMod.updateDoc(fsMod.doc(db, "trips", id), toPatch(patch));
+      // The write is applied locally at once, but the promise only settles after the server acks.
+      // Offline / dead signal (navigator.onLine can still be true in the mountains) it would hang
+      // and modals would never close — so wait at most 2s, then let it sync in the background.
+      let waiting = true;
+      p.catch((e) => {
+        if (!waiting) alert("稍早的修改上傳失敗，請檢查網路後重試：\n" + (e.code || e.message));
+      });
+      await Promise.race([p, new Promise((r) => setTimeout(r, navigator.onLine ? 2000 : 0))]);
+      waiting = false;
     },
     async deleteTrip(id) {
       await fsMod.deleteDoc(fsMod.doc(db, "trips", id));
@@ -210,8 +229,49 @@ function nav(hash) {
 }
 
 // 分享模式：網址帶 ?trip=<id> 時鎖定單一行程（旅伴看不到其他旅行、沒有返回列表鈕）
-const lockedTripId = new URLSearchParams(location.search).get("trip");
+// Home-screen app (PWA) launches from the manifest start_url without ?trip=, so remember the locked
+// trip on this device; opening the full site in a normal browser tab clears it.
+const isStandalone =
+  window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
+const lockedTripId = (() => {
+  const fromUrl = new URLSearchParams(location.search).get("trip");
+  if (fromUrl) {
+    localStorage.setItem("tp-locked-trip", fromUrl);
+    return fromUrl;
+  }
+  if (isStandalone) return localStorage.getItem("tp-locked-trip");
+  localStorage.removeItem("tp-locked-trip");
+  return null;
+})();
 window.addEventListener("hashchange", onRoute);
+
+// ---- 瀏覽模式／編輯模式 ----
+// Default is read-only (no ✏️/🗑️/＋), so family members don't change things by accident.
+// Checklists, todos and expenses still work in view mode. Choice is remembered per device.
+// Offline always forces view mode.
+let editMode = localStorage.getItem("tp-edit") === "1";
+let isOnline = navigator.onLine;
+const canEdit = () => editMode && isOnline;
+function applyEditClass() {
+  document.body.classList.toggle("view-mode", !canEdit());
+}
+function toast(msg) {
+  document.querySelector(".toast")?.remove();
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add("hide"), 1600);
+  setTimeout(() => t.remove(), 2100);
+}
+function setOnline(v) {
+  if (isOnline === v) return;
+  isOnline = v;
+  render();
+  toast(v ? "📶 已恢復網路" : "📴 目前沒有網路，改為離線瀏覽");
+}
+window.addEventListener("online", () => setOnline(true));
+window.addEventListener("offline", () => setOnline(false));
 
 // 寫入失敗（規則擋下、斷線、登入失敗）時給使用者看得懂的提示，而不是靜默沒反應
 window.addEventListener("unhandledrejection", (e) => {
@@ -370,6 +430,7 @@ function applySeason(t) {
 }
 
 function render() {
+  applyEditClass();
   const { tripId, tab } = parseRoute();
   if (!tripId) {
     applySeason(null);
@@ -397,17 +458,30 @@ function topbar(title, backToHome) {
   return `<header class="topbar">
     ${backToHome && !lockedTripId ? `<button class="icon-btn" id="btn-back" title="回旅行列表">←</button>` : `<span style="font-size:20px">🧳</span>`}
     <h1>${esc(title)}</h1>
+    ${
+      isOnline
+        ? `<button class="modechip${editMode ? " on" : ""}" id="btn-mode" title="${editMode ? "回到瀏覽模式" : "進入編輯模式"}">${editMode ? "✓ 完成" : "✏️ 編輯"}</button>`
+        : `<span class="modechip off" title="沒有網路時只能瀏覽">📴 離線</span>`
+    }
     ${me ? `<button class="userchip" id="btn-user" title="切換使用者">👤 ${esc(me)}</button>` : ""}
   </header>`;
 }
 function bindTopbar() {
   const back = document.getElementById("btn-back");
   if (back) back.addEventListener("click", () => nav("#/"));
+  document.getElementById("btn-mode")?.addEventListener("click", () => {
+    editMode = !editMode;
+    localStorage.setItem("tp-edit", editMode ? "1" : "0");
+    render();
+    toast(editMode ? "✏️ 編輯模式：可以新增、修改、刪除" : "👀 已回到瀏覽模式");
+  });
   const u = document.getElementById("btn-user");
   if (u) u.addEventListener("click", openUserPicker);
 }
 
 function modeNotice() {
+  if (!isOnline && store.mode === "cloud")
+    return `<div class="notice">📴 目前沒有網路：顯示這台裝置上次存下的資料。行李／採購／待辦勾選和記帳仍可使用，恢復網路後會自動上傳；其他修改請等有網路再改。</div>`;
   if (lastError)
     return `<div class="notice">⚠️ ${esc(lastError)}</div>`;
   if (store.mode === "local")
@@ -559,6 +633,7 @@ function renderTrip(tab) {
     b.addEventListener("click", () => nav(`#/t/${currentTripId}/${b.dataset.tab}`))
   );
   bindTripPage(tab);
+  saveTripImagesOffline();
 }
 
 function fabFor(tab) {
@@ -566,7 +641,8 @@ function fabFor(tab) {
   const outlineLabel = { todo: "新增待辦", note: "新增備註", stay: "新增住宿" }[view.outlineTab] || "新增一天";
   const map = { bag: bagLabel, outline: outlineLabel, day: "新增行程", money: "新增一筆帳" };
   if (!map[tab]) return "";
-  return `<button class="fab" id="fab-add" title="${map[tab]}">＋</button>`;
+  // Expenses stay addable in view mode (used on the road by everyone)
+  return `<button class="fab${tab === "money" ? " keep-view" : ""}" id="fab-add" title="${map[tab]}">＋</button>`;
 }
 
 function bindTripPage(tab) {
@@ -665,7 +741,7 @@ function pageFlight() {
   return `
     <div class="card">
       <div class="card-head"><h2>ℹ️ 旅行資訊</h2>
-        <button class="edit-btn" id="share-trip">🔗 分享給旅伴</button>
+        <button class="edit-btn keep-view" id="share-trip">🔗 分享給旅伴</button>
         <button class="edit-btn" id="edit-info">編輯</button>
       </div>
       <dl class="kv">
@@ -2639,4 +2715,23 @@ function openExpenseModal(editId) {
   window.tpStore = store;
   window.tpUid = uid;
   onRoute();
+  // Service worker = offline app shell (sw.js); http(s) only
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http"))
+    navigator.serviceWorker.register("sw.js").catch(() => {});
 })();
+
+// Save this trip's own thumbnails (food/shopping) into the offline cache once per page load,
+// so they show offline even if nobody opened those tabs. Same cache name as sw.js IMG_CACHE.
+const offlineSaved = new Set();
+function saveTripImagesOffline() {
+  if (!trip || !isOnline || !("caches" in window) || offlineSaved.has(currentTripId)) return;
+  offlineSaved.add(currentTripId);
+  const urls = [...Object.values(trip.food || {}), ...Object.values(trip.shopping || {})]
+    .map((x) => x && x.img)
+    .filter((s) => s && !/^https?:/i.test(s))
+    .map((s) => new URL(s, location.href).href);
+  if (!urls.length) return;
+  caches.open("tp-img").then(async (c) => {
+    for (const u of new Set(urls)) if (!(await c.match(u))) await c.add(u).catch(() => {});
+  });
+}
