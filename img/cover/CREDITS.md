@@ -4,4 +4,4 @@
 
 | 檔案 | 內容 | 作者 | 授權 | 來源 |
 |---|---|---|---|---|
-| `aso-komezuka.jpg` | 阿蘇・米塚夕景 | Raita Futo | CC BY 2.0 | https://commons.wikimedia.org/wiki/File:Komezuka_sunset_(53000695098).jpg |
+| `kumamoto-castle.jpg` | 熊本城天守閣（2023-01） | Suicasmo | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Kumamoto_Castle_Keep_Tower_20230103.jpg |
