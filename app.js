@@ -2421,6 +2421,7 @@ const WX_CODES = {
   95: ["⛈️", "雷雨"], 96: ["⛈️", "雷雨夾冰雹"], 99: ["⛈️", "強雷雨夾冰雹"],
 };
 const WX_DAYS = 16; // Open-Meteo 最多預報 16 天
+const WX_TIMEOUT = 10000; // ms
 const wxCache = new Map(); // key → {ts, data} 或 {ts, promise}；同一頁面 1 小時內不重抓
 
 function isoLocal(d) {
@@ -2459,7 +2460,12 @@ function fetchWx(lat, lng) {
   const vars = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max";
   const models = src.model === "best_match" ? "best_match" : `${src.model},best_match`;
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=${vars}&timezone=auto&forecast_days=${WX_DAYS}&wind_speed_unit=ms&models=${models}`;
-  const promise = fetch(url)
+  // Give up after WX_TIMEOUT: when the Open-Meteo server is unreachable the request can hang
+  // for minutes, which left the card stuck on "載入…" forever (2026-11-18).
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), WX_TIMEOUT);
+  const promise = fetch(url, { signal: ctrl.signal })
+    .finally(() => clearTimeout(timer))
     .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
     .then((j) => {
       const data = { src, daily: j.daily, fetchedAt: new Date() };
@@ -2540,7 +2546,9 @@ function fillWx(d) {
       })
       .catch(() => {
         const slot = box.querySelector(`.wx-slot[data-k="${k}"]`);
-        if (slot) slot.innerHTML = `<div class="wx-row wx-loading">⚠️ ${esc(p.name || "")} 天氣載入失敗（需要網路）</div>`;
+        if (!slot) return;
+        const why = navigator.onLine ? "天氣服務暫時沒有回應，稍後重新整理再看" : "目前沒有網路";
+        slot.innerHTML = `<div class="wx-row wx-loading">⚠️ ${esc(p.name || "")}：${why}</div>`;
       });
   });
 }
