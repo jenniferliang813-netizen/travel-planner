@@ -6,4 +6,5 @@ workers_dev = true
 [vars]
 FIREBASE_API_KEY = "AIzaSyA8E1uCbYRk_m9Npa9uq1HgjKXe0tR2JAc"
 FIREBASE_PROJECT_ID = "travel-planner-40b2a"
-ALLOWED_TRIP_IDS = "busan2026aug"
+# ALLOWED_TRIP_IDS is a Cloudflare *secret* since 2026-11-18 (trip ids are unguessable and must not
+# appear in this public repo). Set with: npx wrangler secret bulk <json file in private-backups/>.

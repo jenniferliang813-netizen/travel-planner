@@ -9,7 +9,7 @@ machine-readable, read-only JSON view for trip discussions in chat.
 - `GET /trip/:tripId?key=READ_KEY` - sanitized itinerary JSON.
 - `GET /trip/:tripId` with `Authorization: Bearer READ_KEY` - same response.
 
-Only trip IDs listed in `ALLOWED_TRIP_IDS` can be read. The response includes
+Only trip IDs listed in the `ALLOWED_TRIP_IDS` secret can be read. The response includes
 trip dates, travelers, flight segments, days, schedule, route, and shopping.
 It intentionally excludes expenses, luggage, payer/split data, Firebase
 internals, and airport-transfer booking/contact details.
@@ -18,6 +18,7 @@ internals, and airport-transfer booking/contact details.
 
 - `READ_KEY`: random key required by the itinerary route.
 - `FIREBASE_REFRESH_TOKEN`: refresh token for one Firebase anonymous reader.
+- `ALLOWED_TRIP_IDS`: comma-separated trip document ids (secret, because ids are unguessable links).
 
 Local secret files (`.dev.vars` and `.secrets.json`) are ignored by Git.
 

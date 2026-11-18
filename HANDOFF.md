@@ -2,6 +2,10 @@
 
 > **這份會公開在 GitHub 上**，只寫程式架構與規則，**不放任何私人行程內容、旅伴資料、文件 ID、金鑰**。
 > 完整交班單 `AGENTS.md` 只存在使用者的電腦上（已 gitignore）。在雲端（claude.ai/code、手機）開 session 時讀這份就好。
+>
+> **資安（2026-11-18，v=30）**：Firestore 規則禁止 `list`，旅行 document id 一律是隨機字串（`newTripId()`），
+> 連結裡的 id 就是門鎖。首頁只列「這台裝置開過的旅行」（`localStorage["tp-known-trips"]`），另有「📎 開啟旅行連結」可貼網址加入。
+> **任何旅行 id 都不可寫進這個 repo**（含 commit 訊息、`worker/wrangler.toml`；Worker 的允許清單是 secret `ALLOWED_TRIP_IDS`）。
 
 ## 使用者
 

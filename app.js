@@ -10,6 +10,57 @@ const DELETE = " __DELETE__";
 const $app = document.getElementById("app");
 const $modalRoot = document.getElementById("modal-root");
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+// Trip document ids must be unguessable (2026-11-18): Firestore rules forbid listing the collection,
+// so the random id in the link is what keeps other people out. 16 chars x 32 symbols = 80 bits.
+const newTripId = () => {
+  const abc = "abcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return uid() + "-" + Array.from(bytes, (b) => abc[b % 32]).join("");
+};
+
+// ---- Trips this device has opened (cloud mode) ----
+// The cloud store can no longer list every trip (rules: `allow list: if false`), so the home page
+// shows the trips this device has opened via a link, remembered in localStorage.
+const KNOWN_KEY = "tp-known-trips";
+const knownListeners = new Set();
+function loadKnown() {
+  try {
+    return JSON.parse(localStorage.getItem(KNOWN_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+function saveKnown(list) {
+  localStorage.setItem(KNOWN_KEY, JSON.stringify(list));
+  knownListeners.forEach((cb) => cb(list));
+}
+function rememberTrip(id, doc) {
+  const entry = {
+    id,
+    name: doc.name || "",
+    destination: doc.destination || "",
+    startDate: doc.startDate || "",
+    endDate: doc.endDate || "",
+    createdAt: doc.createdAt || 0,
+  };
+  const list = loadKnown();
+  const prev = list.find((t) => t.id === id);
+  if (prev && JSON.stringify(prev) === JSON.stringify(entry)) return;
+  saveKnown([...list.filter((t) => t.id !== id), entry]);
+}
+function forgetTrip(id) {
+  const list = loadKnown();
+  if (list.some((t) => t.id === id)) saveKnown(list.filter((t) => t.id !== id));
+}
+// Pull trip ids out of pasted text: full links (?trip=ID or #/t/ID/...) or bare ids
+function parseTripIds(text) {
+  const ids = new Set();
+  for (const tok of String(text).split(/\s+/).filter(Boolean)) {
+    const m = tok.match(/[?&]trip=([A-Za-z0-9_-]+)/) || tok.match(/#\/t\/([A-Za-z0-9_-]+)/) || tok.match(/^([A-Za-z0-9_-]{8,})$/);
+    if (m) ids.add(m[1]);
+  }
+  return [...ids];
+}
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -124,7 +175,6 @@ async function makeFirebaseStore() {
       authWarning =
         "Firebase 匿名登入失敗（請到 Firebase 主控台 → Authentication → 啟用「匿名」登入）：" + e.code;
   }
-  const col = fsMod.collection(db, "trips");
   const toPatch = (patch) => {
     const out = {};
     for (const [k, v] of Object.entries(patch)) out[k] = v === DELETE ? fsMod.deleteField() : v;
@@ -133,27 +183,33 @@ async function makeFirebaseStore() {
   return {
     mode: "cloud",
     authWarning,
+    // Not a collection query any more (rules forbid `list`): only trips this device has opened
     subscribeTrips(cb) {
-      return fsMod.onSnapshot(
-        col,
-        (snap) => {
-          const list = snap.docs
-            .map((d) => ({ id: d.id, ...d.data() }))
-            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-          cb(list);
-        },
-        (err) => cb([], err)
-      );
+      knownListeners.add(cb);
+      cb(loadKnown());
+      return () => knownListeners.delete(cb);
     },
     subscribeTrip(id, cb) {
       return fsMod.onSnapshot(
         fsMod.doc(db, "trips", id),
-        (snap) => cb(snap.exists() ? snap.data() : null),
+        (snap) => {
+          if (snap.exists()) rememberTrip(id, snap.data());
+          else if (!snap.metadata.fromCache) forgetTrip(id);
+          cb(snap.exists() ? snap.data() : null);
+        },
         (err) => cb(null, err)
       );
     },
+    // One-time read used by "open a trip link" on the home page; returns true if the trip exists
+    async addKnownTrip(id) {
+      const snap = await fsMod.getDoc(fsMod.doc(db, "trips", id));
+      if (!snap.exists()) return false;
+      rememberTrip(id, snap.data());
+      return true;
+    },
     async createTrip(id, docData) {
       await fsMod.setDoc(fsMod.doc(db, "trips", id), docData);
+      rememberTrip(id, docData);
     },
     async updateTrip(id, patch) {
       const p = fsMod.updateDoc(fsMod.doc(db, "trips", id), toPatch(patch));
@@ -169,6 +225,7 @@ async function makeFirebaseStore() {
     },
     async deleteTrip(id) {
       await fsMod.deleteDoc(fsMod.doc(db, "trips", id));
+      forgetTrip(id);
     },
   };
 }
@@ -443,7 +500,7 @@ function render() {
   if (trip === null) {
     $app.innerHTML = `
       ${topbar("旅行計畫", true)}
-      <div class="page"><div class="empty">載入中…（如果一直停在這裡，這筆旅行可能已被刪除）</div></div>`;
+      <div class="page"><div class="empty">載入中…<br/><br/>如果一直停在這裡，這個連結可能已失效：旅行網址在 2026 年 11 月為了安全全部換新了，請向婷瑋要新的連結，並用瀏覽器（Safari／Chrome）開啟；加到主畫面的捷徑也要用新連結重新加一次。</div></div>`;
     bindTopbar();
     return;
   }
@@ -515,9 +572,12 @@ function renderHome() {
                   <span class="t-arrow">›</span>
                 </div>`;
 
+  const cloud = store.mode === "cloud";
   const body =
     trips.length === 0
-      ? `<div class="empty">還沒有旅行 —— 按右下角「＋」建立第一個！</div>`
+      ? cloud
+        ? `<div class="empty">這台裝置還沒開過任何旅行。<br/>按上面「📎 開啟旅行連結」貼上旅行網址，或按右下角「＋」建立新旅行。</div>`
+        : `<div class="empty">還沒有旅行 —— 按右下角「＋」建立第一個！</div>`
       : upcoming.map((t) => card(t, false)).join("") +
         (past.length ? `<div class="past-sep"><span>・已結束・</span></div>` + past.map((t) => card(t, true)).join("") : "");
 
@@ -525,6 +585,7 @@ function renderHome() {
     ${topbar("婷瑋的出國旅行計畫~", false)}
     <div class="page">
       ${modeNotice()}
+      ${cloud ? `<div class="btn-row" style="justify-content:flex-start;margin:0 0 12px"><button class="btn secondary" id="open-link">📎 開啟旅行連結</button></div>` : ""}
       ${body}
     </div>
     <button class="fab" id="fab-new" title="新增旅行">＋</button>`;
@@ -533,6 +594,39 @@ function renderHome() {
     c.addEventListener("click", () => nav("#/t/" + c.dataset.id + "/home"))
   );
   document.getElementById("fab-new").addEventListener("click", openNewTripModal);
+  document.getElementById("open-link")?.addEventListener("click", openTripLinkModal);
+}
+
+// Home page (cloud mode): paste one or more trip links so this device remembers them
+function openTripLinkModal() {
+  openModal(`
+    <h3>開啟旅行連結</h3>
+    <div class="field"><label>貼上旅行網址（可以一次貼好幾個，一行一個）</label>
+      <textarea id="tl-text" rows="4" placeholder="https://…/travel-planner/?trip=…"></textarea></div>
+    <div class="form-hint">為了安全，首頁只會列出這台裝置開過的旅行；別台裝置要再貼一次連結。</div>
+    <div class="btn-row">
+      <button class="btn secondary" id="tl-cancel">取消</button>
+      <button class="btn" id="tl-ok">開啟</button>
+    </div>
+  `, (el) => {
+    el.querySelector("#tl-cancel").addEventListener("click", closeModal);
+    el.querySelector("#tl-ok").addEventListener("click", async () => {
+      const ids = parseTripIds(el.querySelector("#tl-text").value);
+      if (!ids.length) return alert("看不出旅行網址，請整串貼上（含 ?trip= 那段）");
+      const found = [];
+      for (const id of ids) {
+        try {
+          if (await store.addKnownTrip(id)) found.push(id);
+        } catch (e) {
+          /* permission-denied or network: treated as not found */
+        }
+      }
+      closeModal();
+      if (!found.length) return alert("找不到這些旅行。連結可能已失效，請向婷瑋要新的連結。");
+      if (found.length < ids.length) alert(`有 ${ids.length - found.length} 個連結找不到（可能已失效），其他已加入。`);
+      if (found.length === 1) nav("#/t/" + found[0] + "/home");
+    });
+  });
 }
 
 function openNewTripModal() {
@@ -564,7 +658,7 @@ function openNewTripModal() {
       DEFAULT_LUGGAGE.forEach(([cat, item], i) => {
         luggage[uid() + i] = { cat, name: item, note: "", order: i, checked: {} };
       });
-      const id = uid();
+      const id = newTripId();
       const fxCode = el.querySelector("#nt-fx").value.trim().toUpperCase();
       const fxRate = parseFloat(el.querySelector("#nt-rate").value);
       await store.createTrip(id, {
@@ -2843,6 +2937,7 @@ function openExpenseModal(editId) {
   // 管理用掛鉤：讓 AI/console 能批次匯入行程資料（一般使用不會碰到）
   window.tpStore = store;
   window.tpUid = uid;
+  window.tpNewTripId = newTripId;
   onRoute();
   // Service worker = offline app shell (sw.js); http(s) only
   if ("serviceWorker" in navigator && location.protocol.startsWith("http"))
